@@ -1,6 +1,6 @@
 {
   "name": "shop-pos-system",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Shop POS System - Point of Sale with barcode scanner, products and sales management",
   "author": "Mohsin Rasheed",
   "license": "MIT",
@@ -27,11 +27,7 @@
     },
     "files": [
       "electron/main.cjs",
-      "electron/preload.cjs",
-      "electron/package.json",
-      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
-      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
-      "!**/._*"
+      "electron/preload.cjs"
     ],
     "extraResources": [
       {
@@ -50,7 +46,10 @@
     },
     "win": {
       "target": ["portable"],
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "signtoolOptions": null,
+      "signAndEditExecutable": false,
+      "forceCodeSigning": false
     }
   },
   "dependencies": {
