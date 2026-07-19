@@ -1,0 +1,123 @@
+// Prisma schema for Shop POS System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  password     String
+  phone        String?
+  role         String   @default("CASHIER") // ADMIN | MANAGER | CASHIER
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  sales        Sale[]
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  icon      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  products  Product[]
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  name         String
+  barcode      String   @unique
+  barcodeType  String   @default("CODE128") // CODE128 | EAN13 | COMPANY (scanned)
+  categoryId   String?
+  category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  costPrice    Float    @default(0)   // purchase price
+  salePrice    Float    @default(0)   // selling price
+  unit         String   @default("piece") // piece | kg | gram | litre | ml | dozen
+  stock        Float    @default(0)
+  minStock     Float    @default(0)   // low-stock alert threshold
+  taxRate      Float    @default(0)   // percent
+  hasBarcode   Boolean  @default(true) // false for loose items (auto-generated)
+  image        String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  saleItems    SaleItem[]
+  stockLogs    StockLog[]
+}
+
+model Sale {
+  id           String     @id @default(cuid())
+  invoiceNo    String     @unique
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  customerName String?
+  customerPhone String?
+  subtotal     Float      @default(0)
+  taxTotal     Float      @default(0)
+  discount     Float      @default(0)
+  total        Float      @default(0)
+  paidAmount   Float      @default(0)
+  change       Float      @default(0)
+  paymentMethod String    @default("CASH") // CASH | CARD | MOBILE
+  status       String     @default("COMPLETED") // COMPLETED | REFUNDED
+  note         String?
+  createdAt    DateTime   @default(now())
+  items        SaleItem[]
+}
+
+model SaleItem {
+  id         String  @id @default(cuid())
+  saleId     String
+  sale       Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product @relation(fields: [productId], references: [id])
+  name       String
+  barcode    String
+  price      Float
+  costPrice  Float
+  quantity   Float
+  unit       String
+  taxRate    Float
+  lineTotal  Float
+}
+
+model StockLog {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type      String   // PURCHASE | SALE | ADJUSTMENT | RETURN
+  quantity  Float
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Settings {
+  id            String   @id @default("shop")
+  shopName      String   @default("My Shop")
+  shopAddress   String?
+  shopPhone     String?
+  currency      String   @default("Rs")
+  taxEnabled    Boolean  @default(false)
+  defaultTax    Float    @default(0)
+  receiptFooter String?
+  invoicePrefix String   @default("INV")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
