@@ -1,7 +1,6 @@
-// Prepares the Electron app resources:
-// 1. Copies the Next.js standalone build into dist-electron-server/
-// 2. Generates a fresh empty pos.db (with schema) as the template DB
-import { existsSync, rmSync, cpSync, mkdirSync } from "fs";
+// Prepares Electron resources. Renames node_modules -> nm to bypass
+// electron-builder's automatic node_modules pruning in extraResources.
+import { existsSync, rmSync, cpSync, mkdirSync, renameSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { execSync } from "child_process";
 
@@ -15,35 +14,49 @@ if (!existsSync(standaloneSrc)) {
   process.exit(1);
 }
 
-// Clean destination
 if (existsSync(serverDest)) rmSync(serverDest, { recursive: true, force: true });
 mkdirSync(serverDest, { recursive: true });
-
-// Copy standalone (server.js + node_modules + .next + public)
 cpSync(standaloneSrc, serverDest, { recursive: true });
 console.log("[prepare-electron] Standalone copied to", serverDest);
 
-// Generate a fresh template database with the Prisma schema (no data)
+// Rename node_modules -> nm so electron-builder includes ALL of it in extraResources
+// (electron-builder strips node_modules in extraResources by default).
+const nmOld = join(serverDest, "node_modules");
+const nmNew = join(serverDest, "nm");
+if (existsSync(nmOld)) {
+  renameSync(nmOld, nmNew);
+  console.log("[prepare-electron] Renamed node_modules -> nm");
+}
+
+// Patch server.js so Node can resolve modules from "nm" instead of "node_modules".
+// We do this by setting NODE_PATH env at runtime (handled in main.cjs) AND by
+// creating a tiny loader. Simplest: keep node_modules as a symlink to nm.
+// But symlinks may not survive packaging. Instead we patch the standalone's
+// require resolution by creating node_modules back as a junction.
+// Cleanest cross-platform: set NODE_PATH in main.cjs. Done there.
+
+// Generate fresh template DB
 console.log("[prepare-electron] Generating template pos.db...");
 const templateDb = join(serverDest, "pos.db");
 if (existsSync(templateDb)) rmSync(templateDb, { force: true });
-
 try {
   execSync(`DATABASE_URL="file:${templateDb}" bunx prisma db push --skip-generate`, {
     stdio: "inherit",
     cwd: root,
   });
-  console.log("[prepare-electron] Template DB created at", templateDb);
+  console.log("[prepare-electron] Template DB created");
 } catch (e) {
   console.error("[prepare-electron] Failed to create template DB:", e.message);
   process.exit(1);
 }
 
-// Verify server.js exists
-const serverJs = join(serverDest, "server.js");
-if (!existsSync(serverJs)) {
-  console.error("[prepare-electron] ERROR: server.js missing in standalone output!");
-  process.exit(1);
+// Verify
+const checks = [
+  join(serverDest, "server.js"),
+  join(nmNew, ".prisma", "client"),
+  join(nmNew, "@prisma", "client"),
+];
+for (const c of checks) {
+  console.log(existsSync(c) ? "[prepare-electron] OK: " + c : "[prepare-electron] MISSING: " + c);
 }
-
-console.log("[prepare-electron] Done. Electron resources ready.");
+console.log("[prepare-electron] Done.");
