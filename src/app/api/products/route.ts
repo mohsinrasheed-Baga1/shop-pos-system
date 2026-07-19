@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   const dup = await db.product.findUnique({ where: { barcode } });
   if (dup) {
     return NextResponse.json(
-      { error: "یہ بارکوڈ پہلے سے موجود ہے" },
+      { error: "This barcode already exists" },
       { status: 400 }
     );
   }
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
         productId: product.id,
         type: "PURCHASE",
         quantity: product.stock,
-        note: "ابتدائی سٹاک",
+        note: "Initial stock",
       },
     });
   }

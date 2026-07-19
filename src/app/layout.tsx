@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "POS System - دکان کا حساب",
+  title: "POS System - Shop Management",
   description: "Point of Sale system with barcode scanner, products and sales management",
 };
 
@@ -27,7 +27,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ur" suppressHydrationWarning dir="rtl">
+    <html lang="en" suppressHydrationWarning dir="ltr">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >

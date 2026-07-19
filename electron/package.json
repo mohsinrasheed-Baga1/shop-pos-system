@@ -1,0 +1,16 @@
+{
+  "name": "shop-pos-system",
+  "version": "1.0.0",
+  "description": "Shop POS System - Point of Sale with barcode scanner, products and sales management",
+  "main": "main.cjs",
+  "author": "Mohsin Rasheed",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^33.0.0"
+  }
+}

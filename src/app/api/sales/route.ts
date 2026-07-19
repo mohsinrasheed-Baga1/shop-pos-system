@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const items: any[] = body.items || [];
   if (items.length === 0) {
-    return NextResponse.json({ error: "کارٹ خالی ہے" }, { status: 400 });
+    return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
   }
 
   // count today's sales to build invoice number
@@ -53,11 +53,11 @@ export async function POST(req: NextRequest) {
   for (const it of items) {
     const product = await db.product.findUnique({ where: { id: it.productId } });
     if (!product) {
-      return NextResponse.json({ error: "پروڈکٹ نہیں ملی" }, { status: 400 });
+      return NextResponse.json({ error: "Product not found" }, { status: 400 });
     }
     const qty = Number(it.quantity);
     if (qty <= 0) {
-      return NextResponse.json({ error: "غلط مقدار" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid quantity" }, { status: 400 });
     }
     // stock check for non-loose items handled loosely; deduct anyway
     const price = Number(it.price ?? product.salePrice);
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
         productId: it.productId,
         type: "SALE",
         quantity: -it.quantity,
-        note: `فروخت ${invoiceNo}`,
+        note: `Sale ${invoiceNo}`,
       },
     });
   }

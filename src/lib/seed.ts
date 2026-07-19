@@ -11,9 +11,9 @@ export async function seedIfNeeded() {
       await db.settings.create({
         data: {
           id: "shop",
-          shopName: "میری دکان",
+          shopName: "My Shop",
           currency: "Rs",
-          receiptFooter: "شکریہ! دوبارہ آئیں۔",
+          receiptFooter: "Thank you! Please come again.",
           invoicePrefix: "INV",
         },
       });
@@ -24,7 +24,7 @@ export async function seedIfNeeded() {
       await db.user.create({
         data: {
           email: "admin@pos.local",
-          name: "ایڈمن",
+          name: "Admin",
           password: hash,
           role: "ADMIN",
           active: true,
@@ -37,14 +37,14 @@ export async function seedIfNeeded() {
       await db.user.create({
         data: {
           email: "cashier@pos.local",
-          name: "کیشیئر",
+          name: "Cashier",
           password: hash,
           role: "CASHIER",
           active: true,
         },
       });
     }
-    const cats = ["کھانے کی اشیاء", "مشروبات", "گھریلو اشیاء", "صفائی کی اشیاء", "دیگر"];
+    const cats = ["Groceries", "Beverages", "Household", "Cleaning", "Other"];
     for (const name of cats) {
       const exists = await db.category.findUnique({ where: { name } });
       if (!exists) await db.category.create({ data: { name } });

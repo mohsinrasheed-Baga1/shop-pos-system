@@ -70,7 +70,7 @@ export function PosView({ settings }: PosViewProps) {
       const data = await res.json();
       setProducts(data.products || []);
     } catch {
-      toast.error("پروڈکٹس لوڈ نہیں ہوئے");
+      toast.error("Failed to load products");
     } finally {
       setLoading(false);
     }
@@ -95,18 +95,18 @@ export function PosView({ settings }: PosViewProps) {
 
   function addToCart(product: Product) {
     if (!product.active) {
-      toast.error("یہ پروڈکٹ غیر فعال ہے");
+      toast.error("This product is inactive");
       return;
     }
     if (product.stock <= 0 && !isLooseUnit(product.unit)) {
-      toast.warning("سٹاک خالی ہے");
+      toast.warning("Out of stock");
     }
     cart.addItem(product, 1);
   }
 
   async function handleCheckout() {
     if (cart.items.length === 0) {
-      toast.error("کارٹ خالی ہے");
+      toast.error("Cart is empty");
       return;
     }
     setSubmitting(true);
@@ -131,7 +131,7 @@ export function PosView({ settings }: PosViewProps) {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || "فروخت نہیں ہوئی");
+        toast.error(data.error || "Sale failed");
         setSubmitting(false);
         return;
       }
@@ -140,10 +140,10 @@ export function PosView({ settings }: PosViewProps) {
       setCheckoutOpen(false);
       cart.clear();
       setPaidAmount("");
-      toast.success("فروخت مکمل ہوئی!");
+      toast.success("Sale completed!");
       loadProducts();
     } catch (e) {
-      toast.error("نیٹ ورک مسئلہ");
+      toast.error("Network error");
     } finally {
       setSubmitting(false);
     }
@@ -160,10 +160,10 @@ export function PosView({ settings }: PosViewProps) {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <ShoppingCart className="w-6 h-6 text-emerald-600" />
-            فروخت (POS)
+            Sell (POS)
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            پروڈکٹ منتخب کریں یا بارکوڈ سکین کریں
+            Select products or scan a barcode
           </p>
         </div>
         <Button
@@ -171,7 +171,7 @@ export function PosView({ settings }: PosViewProps) {
           onClick={() => setView("scanner")}
           className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
         >
-          <ScanBarcode className="w-4 h-4 ml-2" /> بارکوڈ سکینر
+          <ScanBarcode className="w-4 h-4 mr-2" /> Barcode Scanner
         </Button>
       </div>
 
@@ -179,12 +179,12 @@ export function PosView({ settings }: PosViewProps) {
         {/* Products section */}
         <div className="lg:col-span-2 space-y-3">
           <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="نام یا بارکوڈ سے تلاش کریں..."
+              placeholder="Search by name or barcode..."
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              className="pr-10 h-11"
+              className="pl-10 h-11"
             />
           </div>
 
@@ -198,7 +198,7 @@ export function PosView({ settings }: PosViewProps) {
                   : "bg-muted hover:bg-muted/70"
               }`}
             >
-              تمام
+              All
             </button>
             {categories.map((c) => (
               <button
@@ -228,7 +228,7 @@ export function PosView({ settings }: PosViewProps) {
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">
                 <Package className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                کوئی پروڈکٹ نہیں ملی
+                No products found
               </CardContent>
             </Card>
           ) : (
@@ -238,7 +238,7 @@ export function PosView({ settings }: PosViewProps) {
                   key={p.id}
                   onClick={() => addToCart(p)}
                   disabled={!p.active}
-                  className="group text-right bg-card rounded-xl border p-3 hover:border-emerald-400 hover:shadow-md transition-all disabled:opacity-50"
+                  className="group text-left bg-card rounded-xl border p-3 hover:border-emerald-400 hover:shadow-md transition-all disabled:opacity-50"
                 >
                   <div className="aspect-square rounded-lg bg-gradient-to-br from-emerald-50 to-amber-50 flex items-center justify-center mb-2 overflow-hidden">
                     {p.image ? (
@@ -283,7 +283,7 @@ export function PosView({ settings }: PosViewProps) {
               <div className="flex items-center justify-between">
                 <h2 className="font-bold flex items-center gap-2">
                   <ShoppingCart className="w-5 h-5 text-emerald-600" />
-                  کارٹ
+                  Cart
                   {totals.itemCount > 0 && (
                     <Badge className="bg-emerald-600">{totals.itemCount}</Badge>
                   )}
@@ -295,7 +295,7 @@ export function PosView({ settings }: PosViewProps) {
                     className="text-red-600 hover:bg-red-50"
                     onClick={() => cart.clear()}
                   >
-                    <Trash2 className="w-4 h-4 ml-1" /> صاف
+                    <Trash2 className="w-4 h-4 mr-1" /> Clear
                   </Button>
                 )}
               </div>
@@ -303,7 +303,7 @@ export function PosView({ settings }: PosViewProps) {
               {cart.items.length === 0 ? (
                 <div className="py-10 text-center text-muted-foreground text-sm">
                   <ShoppingCart className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                  کارٹ خالی ہے
+                  Cart is empty
                 </div>
               ) : (
                 <>
@@ -345,7 +345,6 @@ export function PosView({ settings }: PosViewProps) {
                                 if (!isNaN(v))
                                   cart.setQty(item.product.id, v);
                               }}
-                              dir="ltr"
                             />
                             <Button
                               size="icon"
@@ -361,7 +360,7 @@ export function PosView({ settings }: PosViewProps) {
                               <Plus className="w-3 h-3" />
                             </Button>
                           </div>
-                          <div className="text-sm font-bold text-emerald-700 w-16 text-left" dir="ltr">
+                          <div className="text-sm font-bold text-emerald-700 w-16 text-right">
                             {formatMoney(
                               item.product.salePrice * item.quantity,
                               currency
@@ -385,7 +384,7 @@ export function PosView({ settings }: PosViewProps) {
                   {/* customer */}
                   <div className="grid grid-cols-2 gap-2">
                     <Input
-                      placeholder="گاہک کا نام"
+                      placeholder="Customer name"
                       value={cart.customerName}
                       onChange={(e) =>
                         cart.setCustomer(e.target.value, cart.customerPhone)
@@ -393,19 +392,18 @@ export function PosView({ settings }: PosViewProps) {
                       className="h-9 text-sm"
                     />
                     <Input
-                      placeholder="فون"
+                      placeholder="Phone"
                       value={cart.customerPhone}
                       onChange={(e) =>
                         cart.setCustomer(cart.customerName, e.target.value)
                       }
                       className="h-9 text-sm"
-                      dir="ltr"
                     />
                   </div>
 
                   {/* discount */}
                   <div className="flex items-center gap-2">
-                    <Label className="text-sm whitespace-nowrap">رعایت</Label>
+                    <Label className="text-sm whitespace-nowrap">Discount</Label>
                     <Input
                       type="number"
                       value={cart.discount || ""}
@@ -413,30 +411,29 @@ export function PosView({ settings }: PosViewProps) {
                         cart.setDiscount(Number(e.target.value) || 0)
                       }
                       className="h-9"
-                      dir="ltr"
                     />
                   </div>
 
                   {/* totals */}
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">ذیلی جملہ</span>
-                      <span dir="ltr">{formatMoney(totals.subtotal, currency)}</span>
+                      <span className="text-muted-foreground">Subtotal</span>
+                      <span>{formatMoney(totals.subtotal, currency)}</span>
                     </div>
                     {taxEnabled && (
                       <div className="flex justify-between">
-                        <span className="text-muted-foreground">ٹیکس</span>
-                        <span dir="ltr">{formatMoney(totals.taxTotal, currency)}</span>
+                        <span className="text-muted-foreground">Tax</span>
+                        <span>{formatMoney(totals.taxTotal, currency)}</span>
                       </div>
                     )}
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">رعایت</span>
-                      <span dir="ltr">-{formatMoney(totals.discount, currency)}</span>
+                      <span className="text-muted-foreground">Discount</span>
+                      <span>-{formatMoney(totals.discount, currency)}</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between text-lg font-bold">
-                      <span>کل</span>
-                      <span className="text-emerald-700" dir="ltr">
+                      <span>Total</span>
+                      <span className="text-emerald-700">
                         {formatMoney(totals.total, currency)}
                       </span>
                     </div>
@@ -446,7 +443,7 @@ export function PosView({ settings }: PosViewProps) {
                     className="w-full bg-emerald-600 hover:bg-emerald-700 h-11"
                     onClick={() => setCheckoutOpen(true)}
                   >
-                    <CheckCircle2 className="w-5 h-5 ml-2" /> چیک آؤٹ
+                    <CheckCircle2 className="w-5 h-5 mr-2" /> Checkout
                   </Button>
                 </>
               )}
@@ -459,21 +456,21 @@ export function PosView({ settings }: PosViewProps) {
       <Dialog open={checkoutOpen} onOpenChange={setCheckoutOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>ادائیگی</DialogTitle>
+            <DialogTitle>Payment</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="bg-emerald-50 rounded-lg p-4 text-center">
-              <div className="text-sm text-muted-foreground">کل بل</div>
-              <div className="text-3xl font-bold text-emerald-700" dir="ltr">
+              <div className="text-sm text-muted-foreground">Total Bill</div>
+              <div className="text-3xl font-bold text-emerald-700">
                 {formatMoney(totals.total, currency)}
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2">
               {[
-                { v: "CASH", label: "نقد", icon: Banknote },
-                { v: "CARD", label: "کارڈ", icon: CreditCard },
-                { v: "MOBILE", label: "موبائل", icon: Smartphone },
+                { v: "CASH", label: "Cash", icon: Banknote },
+                { v: "CARD", label: "Card", icon: CreditCard },
+                { v: "MOBILE", label: "Mobile", icon: Smartphone },
               ].map((m) => {
                 const Icon = m.icon;
                 return (
@@ -494,22 +491,21 @@ export function PosView({ settings }: PosViewProps) {
             </div>
 
             <div className="space-y-2">
-              <Label>وصول شدہ رقم</Label>
+              <Label>Amount Received</Label>
               <Input
                 type="number"
                 value={paidAmount}
                 onChange={(e) => setPaidAmount(e.target.value)}
                 placeholder={totals.total.toString()}
                 className="h-12 text-lg text-left"
-                dir="ltr"
                 autoFocus
               />
             </div>
 
             {Number(paidAmount) > 0 && (
               <div className="flex justify-between items-center bg-amber-50 rounded-lg p-3">
-                <span className="text-sm font-medium">واپسی</span>
-                <span className="text-xl font-bold text-amber-700" dir="ltr">
+                <span className="text-sm font-medium">Change</span>
+                <span className="text-xl font-bold text-amber-700">
                   {formatMoney(change, currency)}
                 </span>
               </div>
@@ -522,7 +518,6 @@ export function PosView({ settings }: PosViewProps) {
                   variant="outline"
                   size="sm"
                   onClick={() => setPaidAmount(amt.toString())}
-                  dir="ltr"
                 >
                   {amt}
                 </Button>
@@ -535,14 +530,14 @@ export function PosView({ settings }: PosViewProps) {
               onClick={() => setCheckoutOpen(false)}
               disabled={submitting}
             >
-              منسوخ
+              Cancel
             </Button>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
               onClick={handleCheckout}
               disabled={submitting}
             >
-              {submitting ? "ہو رہا ہے..." : "فروخت مکمل"}
+              {submitting ? "Processing..." : "Complete Sale"}
             </Button>
           </DialogFooter>
         </DialogContent>

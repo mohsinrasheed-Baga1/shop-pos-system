@@ -1,54 +1,43 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
-node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+node_modules/
 
-# testing
-/coverage
+# next.js build output
+.next/
+out/
+dist-electron-server/
 
-# next.js
-/.next/
-/out/
+# electron builder output
+release/
 
-# production
-/build
+# database
+db/*.db
+db/*.db-journal
+
+# logs
+*.log
+dev.log
+server.log
+
+# env
+.env
 
 # misc
 .DS_Store
 *.pem
+.vscode/
+.idea/
 
-# debug
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.pnpm-debug.log*
+# os
+Thumbs.db
 
-# env files (can opt-in for committing if needed)
-.env*
+# keep template db out of git (generated)
+build/icon.png
 
-# vercel
-.vercel
-
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-local-*
-.claude
-.z-ai-config
-*.log
-dev.log
-dev.out.log
-test
-prompt
-
-server.log
-# Skills directory
-/skills/
+# internal/sandbox files
+skills/
+agent-ctx/
+examples/
+worklog.md
+download/
+.next/standalone/server.js.bak
+tsconfig.tsbuildinfo

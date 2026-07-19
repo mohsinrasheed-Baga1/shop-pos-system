@@ -13,6 +13,6 @@ export async function GET(
     where: { id },
     include: { items: true, user: { select: { name: true } } },
   });
-  if (!sale) return NextResponse.json({ error: "نہیں ملا" }, { status: 404 });
+  if (!sale) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json({ sale });
 }

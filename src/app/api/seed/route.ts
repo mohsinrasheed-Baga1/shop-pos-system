@@ -5,18 +5,18 @@ import bcrypt from "bcryptjs";
 export async function POST() {
   try {
     // default settings
-    const settings = await db.settings.upsert({
+    await db.settings.upsert({
       where: { id: "shop" },
       update: {},
       create: {
         id: "shop",
-        shopName: "میری دکان",
+        shopName: "My Shop",
         shopAddress: "",
         shopPhone: "",
         currency: "Rs",
         taxEnabled: false,
         defaultTax: 0,
-        receiptFooter: "شکریہ! دوبارہ آئیں۔",
+        receiptFooter: "Thank you! Please come again.",
         invoicePrefix: "INV",
       },
     });
@@ -30,7 +30,7 @@ export async function POST() {
       await db.user.create({
         data: {
           email: "admin@pos.local",
-          name: "ایڈمن",
+          name: "Admin",
           password: hash,
           role: "ADMIN",
           active: true,
@@ -47,7 +47,7 @@ export async function POST() {
       await db.user.create({
         data: {
           email: "cashier@pos.local",
-          name: "کیشیئر",
+          name: "Cashier",
           password: hash,
           role: "CASHIER",
           active: true,
@@ -56,7 +56,7 @@ export async function POST() {
     }
 
     // default categories
-    const cats = ["کھانے کی اشیاء", "مشروبات", "گھریلو اشیاء", "دھوئی اشیاء", " دیگر"];
+    const cats = ["Groceries", "Beverages", "Household", "Cleaning", "Other"];
     for (const name of cats) {
       const exists = await db.category.findUnique({ where: { name } });
       if (!exists) {
@@ -64,7 +64,7 @@ export async function POST() {
       }
     }
 
-    return NextResponse.json({ ok: true, settings });
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

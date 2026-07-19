@@ -16,7 +16,7 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   const user = await getSessionUser();
   if (!user || user.role !== "ADMIN") {
-    return NextResponse.json({ error: "صرف ایڈمن" }, { status: 403 });
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
   const body = await req.json();
   const settings = await db.settings.upsert({

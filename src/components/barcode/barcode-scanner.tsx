@@ -73,8 +73,8 @@ export function BarcodeScanner({
         controlsRef.current = controls;
         setActive(true);
       } catch (e: any) {
-        setError(e?.message || "کیمرہ شروع نہیں ہوا");
-        toast.error("کیمرہ تک رسائی نہیں ہو سکی");
+        setError(e?.message || "Camera failed to start");
+        toast.error("Cannot access camera");
       }
     },
     [deviceId, onScan, debounceMs]
@@ -106,7 +106,7 @@ export function BarcodeScanner({
         {!active && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-white/80 gap-2">
             <CameraOff className="w-10 h-10" />
-            <p className="text-sm">کیمرہ بند ہے</p>
+            <p className="text-sm">Camera is off</p>
           </div>
         )}
       </div>
@@ -118,16 +118,16 @@ export function BarcodeScanner({
       <div className="flex flex-wrap gap-2 justify-center">
         {!active ? (
           <Button onClick={() => start()} className="bg-emerald-600 hover:bg-emerald-700">
-            <Camera className="w-4 h-4 ml-2" /> کیمرہ شروع کریں
+            <Camera className="w-4 h-4 ml-2" /> Start Camera
           </Button>
         ) : (
           <Button variant="outline" onClick={stop}>
-            <X className="w-4 h-4 ml-2" /> رکو
+            <X className="w-4 h-4 ml-2" /> Stop
           </Button>
         )}
         {onClose && (
           <Button variant="ghost" onClick={onClose}>
-            بند کریں
+            Close
           </Button>
         )}
       </div>
@@ -146,14 +146,14 @@ export function BarcodeScanner({
         >
           {devices.map((d) => (
             <option key={d.deviceId} value={d.deviceId}>
-              {d.label || `کیمرہ ${d.deviceId.slice(0, 6)}`}
+              {d.label || `Camera ${d.deviceId.slice(0, 6)}`}
             </option>
           ))}
         </select>
       )}
       <p className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1">
         <ScanLine className="w-3 h-3" />
-        بارکوڈ کو کیمرے کے سامنے رکھیں
+        Place the barcode in front of the camera
       </p>
     </div>
   );

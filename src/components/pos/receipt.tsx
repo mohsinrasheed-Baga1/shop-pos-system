@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Printer, X, CheckCircle2 } from "lucide-react";
+import { Printer, CheckCircle2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -31,11 +31,9 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
     const content = printRef.current;
     if (!content) return;
     const win = window.open("", "_blank", "width=380,height=600");
-    if (!win) {
-      return;
-    }
+    if (!win) return;
     win.document.write(`
-      <html dir="rtl"><head><title>Receipt ${sale.invoiceNo}</title>
+      <html dir="ltr"><head><title>Receipt ${sale.invoiceNo}</title>
       <style>
         * { font-family: 'Tahoma', sans-serif; box-sizing: border-box; }
         body { margin: 0; padding: 8px; font-size: 12px; color: #000; }
@@ -43,7 +41,7 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
         .row { display: flex; justify-content: space-between; }
         .border { border-top: 1px dashed #000; margin: 6px 0; }
         table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: right; padding: 2px 0; font-size: 11px; }
+        th, td { text-align: left; padding: 2px 0; font-size: 11px; }
         th { border-bottom: 1px solid #000; }
         .bold { font-weight: bold; }
         .big { font-size: 14px; font-weight: bold; }
@@ -63,13 +61,12 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-emerald-700">
             <CheckCircle2 className="w-5 h-5" />
-            فروخت کامیاب
+            Sale Successful
           </DialogTitle>
         </DialogHeader>
         <div
           ref={printRef}
           className="bg-white text-black p-4 rounded-lg space-y-2 text-sm"
-          dir="rtl"
         >
           <div className="center">
             <div className="big">{settings?.shopName || "POS"}</div>
@@ -77,23 +74,21 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
               <div className="text-xs">{settings.shopAddress}</div>
             )}
             {settings?.shopPhone && (
-              <div className="text-xs">فون: {settings.shopPhone}</div>
+              <div className="text-xs">Phone: {settings.shopPhone}</div>
             )}
           </div>
           <div className="border" />
           <div className="row text-xs">
-            <span>انوائس:</span>
-            <span dir="ltr">{sale.invoiceNo}</span>
+            <span>Invoice:</span>
+            <span>{sale.invoiceNo}</span>
           </div>
           <div className="row text-xs">
-            <span>تاریخ:</span>
-            <span dir="ltr">
-              {new Date(sale.createdAt).toLocaleString("ur-PK")}
-            </span>
+            <span>Date:</span>
+            <span>{new Date(sale.createdAt).toLocaleString("en-US")}</span>
           </div>
           {sale.customerName && (
             <div className="row text-xs">
-              <span>گاہک:</span>
+              <span>Customer:</span>
               <span>{sale.customerName}</span>
             </div>
           )}
@@ -101,9 +96,9 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
           <table>
             <thead>
               <tr>
-                <th>نام</th>
-                <th>مقدار</th>
-                <th>رقم</th>
+                <th>Item</th>
+                <th>Qty</th>
+                <th>Amount</th>
               </tr>
             </thead>
             <tbody>
@@ -111,12 +106,12 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
                 <tr key={it.id}>
                   <td className="text-xs">
                     {it.name}
-                    <div className="text-[10px] opacity-70" dir="ltr">
+                    <div className="text-[10px] opacity-70">
                       {it.price} x {it.quantity} {unitLabel(it.unit)}
                     </div>
                   </td>
                   <td className="text-xs">{it.quantity}</td>
-                  <td className="text-xs" dir="ltr">
+                  <td className="text-xs">
                     {formatMoney(it.lineTotal, currency)}
                   </td>
                 </tr>
@@ -125,40 +120,40 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
           </table>
           <div className="border" />
           <div className="row text-xs">
-            <span>ذیلی جملہ:</span>
-            <span dir="ltr">{formatMoney(sale.subtotal, currency)}</span>
+            <span>Subtotal:</span>
+            <span>{formatMoney(sale.subtotal, currency)}</span>
           </div>
           {taxEnabled && sale.taxTotal > 0 && (
             <div className="row text-xs">
-              <span>ٹیکس:</span>
-              <span dir="ltr">{formatMoney(sale.taxTotal, currency)}</span>
+              <span>Tax:</span>
+              <span>{formatMoney(sale.taxTotal, currency)}</span>
             </div>
           )}
           {sale.discount > 0 && (
             <div className="row text-xs">
-              <span>رعایت:</span>
-              <span dir="ltr">-{formatMoney(sale.discount, currency)}</span>
+              <span>Discount:</span>
+              <span>-{formatMoney(sale.discount, currency)}</span>
             </div>
           )}
           <div className="row bold big">
-            <span>کل:</span>
-            <span dir="ltr">{formatMoney(sale.total, currency)}</span>
+            <span>Total:</span>
+            <span>{formatMoney(sale.total, currency)}</span>
           </div>
           <div className="row text-xs">
-            <span>ادائیگی:</span>
-            <span dir="ltr">
+            <span>Payment:</span>
+            <span>
               {sale.paymentMethod === "CASH"
-                ? "نقد"
+                ? "Cash"
                 : sale.paymentMethod === "CARD"
-                ? "کارڈ"
-                : "موبائل"}{" "}
+                ? "Card"
+                : "Mobile"}{" "}
               ({formatMoney(sale.paidAmount, currency)})
             </span>
           </div>
           {sale.change > 0 && (
             <div className="row text-xs">
-              <span>واپسی:</span>
-              <span dir="ltr">{formatMoney(sale.change, currency)}</span>
+              <span>Change:</span>
+              <span>{formatMoney(sale.change, currency)}</span>
             </div>
           )}
           <div className="border" />
@@ -171,7 +166,7 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
             />
           </div>
           <div className="center text-xs mt-2">
-            {settings?.receiptFooter || "شکریہ! دوبارہ آئیں۔"}
+            {settings?.receiptFooter || "Thank you! Please come again."}
           </div>
         </div>
         <div className="flex gap-2">
@@ -180,13 +175,13 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
             className="flex-1"
             onClick={() => onOpenChange(false)}
           >
-            بند کریں
+            Close
           </Button>
           <Button
             className="flex-1 bg-emerald-600 hover:bg-emerald-700"
             onClick={handlePrint}
           >
-            <Printer className="w-4 h-4 ml-2" /> پرنٹ
+            <Printer className="w-4 h-4 mr-2" /> Print
           </Button>
         </div>
       </DialogContent>

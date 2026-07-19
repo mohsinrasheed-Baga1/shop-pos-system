@@ -52,14 +52,14 @@ export function isLooseUnit(unit: string): boolean {
 
 export function unitLabel(unit: string): string {
   const map: Record<string, string> = {
-    piece: "پیس",
-    kg: "کلو",
-    gram: "گرام",
-    litre: "لیٹر",
-    ml: "ملی لیٹر",
-    dozen: "درجن",
-    metre: "میٹر",
-    feet: "فٹ",
+    piece: "pc",
+    kg: "kg",
+    gram: "g",
+    litre: "L",
+    ml: "ml",
+    dozen: "dz",
+    metre: "m",
+    feet: "ft",
   };
   return map[unit] || unit;
 }

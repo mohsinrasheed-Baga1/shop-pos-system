@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { productId, quantity, type = "PURCHASE", note } = body;
   if (!productId || !quantity) {
-    return NextResponse.json({ error: "غلط ڈیٹا" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid data" }, { status: 400 });
   }
   const product = await db.product.update({
     where: { id: productId },
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       productId,
       type,
       quantity: Number(quantity),
-      note: note || "سٹاک اضافہ",
+      note: note || "Stock addition",
     },
   });
   return NextResponse.json({ product });

@@ -9,7 +9,6 @@ import {
   TrendingUp,
   Wallet,
   RefreshCw,
-  Printer,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,12 +22,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { formatMoney } from "@/lib/pos-utils";
@@ -64,7 +57,7 @@ export function SalesView() {
       }
       setSales(list);
     } catch {
-      toast.error("فروخت لوڈ نہیں ہوئی");
+      toast.error("Failed to load sales");
     } finally {
       setLoading(false);
     }
@@ -99,14 +92,14 @@ export function SalesView() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Receipt className="w-6 h-6 text-emerald-600" />
-            فروخت کی تاریخ
+            Sales History
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            تمام بلوں کا ریکارڈ اور تفصیلات
+            Record and details of all invoices
           </p>
         </div>
         <Button variant="outline" onClick={load}>
-          <RefreshCw className="w-4 h-4 ml-2" /> تازہ
+          <RefreshCw className="w-4 h-4 mr-2" /> Refresh
         </Button>
       </div>
 
@@ -118,8 +111,8 @@ export function SalesView() {
               <Wallet className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">کل فروخت</div>
-              <div className="text-lg font-bold text-emerald-700" dir="ltr">
+              <div className="text-xs text-muted-foreground">Total Sales</div>
+              <div className="text-lg font-bold text-emerald-700">
                 {loading ? "..." : formatMoney(totalRevenue, currency)}
               </div>
             </div>
@@ -131,7 +124,7 @@ export function SalesView() {
               <Receipt className="w-6 h-6 text-amber-600" />
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">بلوں کی تعداد</div>
+              <div className="text-xs text-muted-foreground">Invoice Count</div>
               <div className="text-lg font-bold">
                 {loading ? "..." : sales.length}
               </div>
@@ -144,7 +137,7 @@ export function SalesView() {
               <TrendingUp className="w-6 h-6 text-purple-600" />
             </div>
             <div>
-              <div className="text-xs text-muted-foreground">فروخت کردہ اشیاء</div>
+              <div className="text-xs text-muted-foreground">Items Sold</div>
               <div className="text-lg font-bold">
                 {loading ? "..." : totalItems}
               </div>
@@ -156,12 +149,12 @@ export function SalesView() {
       {/* filters */}
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="انوائس نمبر یا گاہک کا نام..."
+            placeholder="Invoice number or customer name..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="pr-10"
+            className="pl-10"
           />
         </div>
         <div className="flex gap-1">
@@ -170,14 +163,14 @@ export function SalesView() {
             className={todayOnly ? "bg-emerald-600 hover:bg-emerald-700" : ""}
             onClick={() => setTodayOnly(true)}
           >
-            <Calendar className="w-4 h-4 ml-2" /> آج
+            <Calendar className="w-4 h-4 mr-2" /> Today
           </Button>
           <Button
             variant={!todayOnly ? "default" : "outline"}
             className={!todayOnly ? "bg-emerald-600 hover:bg-emerald-700" : ""}
             onClick={() => setTodayOnly(false)}
           >
-            تمام
+            All
           </Button>
         </div>
       </div>
@@ -193,56 +186,53 @@ export function SalesView() {
           ) : sales.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground">
               <Receipt className="w-10 h-10 mx-auto mb-2 opacity-50" />
-              کوئی فروخت نہیں ملی
+              No sales found
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>انوائس نمبر</TableHead>
-                    <TableHead>تاریخ</TableHead>
-                    <TableHead>گاہک</TableHead>
-                    <TableHead>کیشیئر</TableHead>
-                    <TableHead className="text-left">اشیاء</TableHead>
-                    <TableHead className="text-left">کل</TableHead>
-                    <TableHead className="text-left">ادائیگی</TableHead>
-                    <TableHead className="text-left">اقدامات</TableHead>
+                    <TableHead>Invoice No.</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Cashier</TableHead>
+                    <TableHead className="text-right">Items</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Payment</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {sales.map((s) => (
                     <TableRow key={s.id}>
-                      <TableCell dir="ltr" className="font-mono text-xs">
+                      <TableCell className="font-mono text-xs">
                         {s.invoiceNo}
                       </TableCell>
                       <TableCell className="text-xs">
-                        {new Date(s.createdAt).toLocaleString("ur-PK", {
+                        {new Date(s.createdAt).toLocaleString("en-US", {
                           dateStyle: "short",
                           timeStyle: "short",
                         })}
                       </TableCell>
-                      <TableCell>{s.customerName || "عام گاہک"}</TableCell>
+                      <TableCell>{s.customerName || "Walk-in"}</TableCell>
                       <TableCell className="text-xs">{s.user?.name || "-"}</TableCell>
-                      <TableCell dir="ltr" className="text-left">
+                      <TableCell className="text-right">
                         {s.items.length}
                       </TableCell>
-                      <TableCell
-                        dir="ltr"
-                        className="text-left font-bold text-emerald-700"
-                      >
+                      <TableCell className="text-right font-bold text-emerald-700">
                         {formatMoney(s.total, currency)}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           {s.paymentMethod === "CASH"
-                            ? "نقد"
+                            ? "Cash"
                             : s.paymentMethod === "CARD"
-                            ? "کارڈ"
-                            : "موبائل"}
+                            ? "Card"
+                            : "Mobile"}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Button
                           size="icon"
                           variant="ghost"

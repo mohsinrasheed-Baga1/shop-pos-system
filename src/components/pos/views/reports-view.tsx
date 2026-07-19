@@ -85,17 +85,17 @@ interface ShopSettings {
 }
 
 const RANGE_TABS: { key: RangeKey; label: string }[] = [
-  { key: "today", label: "آج" },
-  { key: "week", label: "ہفتہ" },
-  { key: "month", label: "مہینہ" },
-  { key: "all", label: "تمام" },
+  { key: "today", label: "Today" },
+  { key: "week", label: "Week" },
+  { key: "month", label: "Month" },
+  { key: "all", label: "All" },
 ];
 
 const RANGE_LABELS: Record<RangeKey, string> = {
-  today: "آج کی رپورٹ",
-  week: "پچھلے ہفتے کی رپورٹ",
-  month: "پچھلے مہینے کی رپورٹ",
-  all: "تمام وقت کی رپورٹ",
+  today: "Today's report",
+  week: "Last week's report",
+  month: "Last month's report",
+  all: "All-time report",
 };
 
 // Emerald palette for chart bars
@@ -145,7 +145,7 @@ export function ReportsView() {
         const json = (await res.json()) as ReportData;
         setData(json);
       } catch {
-        toast.error("رپورٹس لوڈ نہیں ہو سکیں۔ دوبارہ کوشش کریں۔");
+        toast.error("Failed to load reports. Please try again.");
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -164,7 +164,7 @@ export function ReportsView() {
 
   function handleRefresh() {
     fetchReports(range, true);
-    toast.success("رپورٹس تازہ کر دی گئیں");
+    toast.success("Reports refreshed");
   }
 
   function handleRangeChange(value: string) {
@@ -174,16 +174,16 @@ export function ReportsView() {
   const isLoading = loading || settingsLoading;
 
   return (
-    <div className="space-y-5" dir="rtl">
+    <div className="space-y-5" dir="ltr">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-emerald-600" />
-            رپورٹس اور ڈیش بورڈ
+            Reports &amp; Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {data ? RANGE_LABELS[range] : "لوڈ ہو رہا ہے..."}
+            {data ? RANGE_LABELS[range] : "Loading..."}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -201,7 +201,7 @@ export function ReportsView() {
             size="icon"
             onClick={handleRefresh}
             disabled={refreshing}
-            aria-label="ریفریش"
+            aria-label="Refresh"
             className="shrink-0"
           >
             <RefreshCw
@@ -220,43 +220,43 @@ export function ReportsView() {
         ) : (
           <>
             <KpiCard
-              title="کل فروخت"
+              title="Total Sales"
               value={formatMoney(data?.totalRevenue ?? 0, currency)}
               icon={<Wallet className="w-5 h-5" />}
               accent="bg-emerald-600"
               accentSoft="bg-emerald-50 text-emerald-700"
-              subtitle={`کاسٹ: ${formatMoney(data?.totalCost ?? 0, currency)}`}
+              subtitle={`Cost: ${formatMoney(data?.totalCost ?? 0, currency)}`}
             />
             <KpiCard
-              title="منافع"
+              title="Profit"
               value={formatMoney(data?.totalProfit ?? 0, currency)}
               icon={<TrendingUp className="w-5 h-5" />}
               accent="bg-teal-600"
               accentSoft="bg-teal-50 text-teal-700"
               subtitle={
                 (data?.totalRevenue ?? 0) > 0
-                  ? `مارجن: ${(
+                  ? `Margin: ${(
                       ((data?.totalProfit ?? 0) / (data?.totalRevenue ?? 1)) *
                       100
                     ).toFixed(1)}%`
-                  : "مارجن: —"
+                  : "Margin: —"
               }
             />
             <KpiCard
-              title="فروخت کی تعداد"
+              title="Sales Count"
               value={`${data?.totalSales ?? 0}`}
               icon={<Receipt className="w-5 h-5" />}
               accent="bg-emerald-700"
               accentSoft="bg-emerald-50 text-emerald-700"
-              subtitle="انوائسز کی تعداد"
+              subtitle="Number of invoices"
             />
             <KpiCard
-              title="ٹیکس"
+              title="Tax"
               value={formatMoney(data?.totalTax ?? 0, currency)}
               icon={<Percent className="w-5 h-5" />}
               accent="bg-teal-700"
               accentSoft="bg-teal-50 text-teal-700"
-              subtitle="وصول شدہ ٹیکس"
+              subtitle="Tax collected"
             />
           </>
         )}
@@ -266,22 +266,22 @@ export function ReportsView() {
       {!isLoading && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <MiniStat
-            label="کل پروڈکٹس"
+            label="Products"
             value={data?.productCount ?? 0}
             icon={<Boxes className="w-4 h-4" />}
           />
           <MiniStat
-            label="کل کیٹگریز"
+            label="Categories"
             value={data?.categoryCount ?? 0}
             icon={<Tags className="w-4 h-4" />}
           />
           <MiniStat
-            label="ٹاپ آئٹمز"
+            label="Top Items"
             value={data?.topProducts?.length ?? 0}
             icon={<Trophy className="w-4 h-4" />}
           />
           <MiniStat
-            label="کم سٹاک"
+            label="Low Stock"
             value={data?.lowStock?.length ?? 0}
             icon={<AlertTriangle className="w-4 h-4" />}
             danger={(data?.lowStock?.length ?? 0) > 0}
@@ -296,10 +296,10 @@ export function ReportsView() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <BarChart3 className="w-5 h-5 text-emerald-600" />
-              آج کی گھنٹہ وار فروخت
+              Today&apos;s Hourly Sales
             </CardTitle>
             <CardDescription>
-              آج کے گھنٹوں کے حساب سے فروخت کا رجحان
+              Sales trend by hour for today
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -308,8 +308,8 @@ export function ReportsView() {
             ) : (data?.hourly?.length ?? 0) === 0 ? (
               <EmptyState
                 icon={<BarChart3 className="w-10 h-10" />}
-                title="آج ابھی کوئی فروخت نہیں ہوئی"
-                desc="جب فروخت ہوگی تو یہاں چارٹ نظر آئے گا"
+                title="No sales yet today"
+                desc="Chart will appear once sales come in"
               />
             ) : (
               <div className="h-72 w-full" dir="ltr">
@@ -354,9 +354,9 @@ export function ReportsView() {
                       }}
                       formatter={(value: number) => [
                         formatMoney(value, currency),
-                        "فروخت",
+                        "Sales",
                       ]}
-                      labelFormatter={(label) => `وقت: ${label}`}
+                      labelFormatter={(label) => `Time: ${label}`}
                     />
                     <Bar
                       dataKey="total"
@@ -380,9 +380,9 @@ export function ReportsView() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Trophy className="w-5 h-5 text-emerald-600" />
-              ٹاپ پروڈکٹس
+              Top Products
             </CardTitle>
-            <CardDescription>سب سے زیادہ فروخت ہونے والی اشیاء</CardDescription>
+            <CardDescription>Best-selling items</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -394,24 +394,24 @@ export function ReportsView() {
             ) : (data?.topProducts?.length ?? 0) === 0 ? (
               <EmptyState
                 icon={<ShoppingBag className="w-10 h-10" />}
-                title="کوئی فروخت نہیں ہوئی"
-                desc="اس مدت میں کوئی ٹاپ آئٹم نہیں ملی"
+                title="No sales recorded"
+                desc="No top items found in this period"
               />
             ) : (
               <div className="max-h-80 overflow-y-auto pr-1 -mr-1 custom-scroll">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-right">#</TableHead>
-                      <TableHead className="text-right">نام</TableHead>
-                      <TableHead className="text-right">مقدار</TableHead>
-                      <TableHead className="text-right">آمدنی</TableHead>
+                      <TableHead className="text-left">#</TableHead>
+                      <TableHead className="text-left">Name</TableHead>
+                      <TableHead className="text-left">Qty</TableHead>
+                      <TableHead className="text-left">Revenue</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {data?.topProducts?.map((p, idx) => (
                       <TableRow key={`${p.name}-${idx}`}>
-                        <TableCell className="text-right">
+                        <TableCell className="text-left">
                           <Badge
                             variant="outline"
                             className="bg-emerald-50 text-emerald-700 border-emerald-200"
@@ -419,13 +419,13 @@ export function ReportsView() {
                             {idx + 1}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right font-medium max-w-[140px] truncate">
+                        <TableCell className="text-left font-medium max-w-[140px] truncate">
                           {p.name}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-left">
                           <Badge variant="secondary">{p.qty}</Badge>
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-emerald-700">
+                        <TableCell className="text-left font-semibold text-emerald-700">
                           {formatMoney(p.revenue, currency)}
                         </TableCell>
                       </TableRow>
@@ -444,10 +444,10 @@ export function ReportsView() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <AlertTriangle className="w-5 h-5 text-amber-500" />
-              کم سٹاک والی اشیاء
+              Low Stock Items
             </CardTitle>
             <CardDescription>
-              وہ اشیاء جن کا سٹاک کم یا ختم ہو چکا ہے
+              Items with low or depleted stock
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -460,18 +460,18 @@ export function ReportsView() {
             ) : (data?.lowStock?.length ?? 0) === 0 ? (
               <EmptyState
                 icon={<Package className="w-10 h-10" />}
-                title="سٹاک کافی ہے"
-                desc="کسی بھی آئٹم کا سٹاک کم نہیں ہے"
+                title="Stock is sufficient"
+                desc="No items are running low"
               />
             ) : (
               <div className="max-h-96 overflow-y-auto pr-1 -mr-1 custom-scroll">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="text-right">نام</TableHead>
-                      <TableHead className="text-right">کیٹگری</TableHead>
-                      <TableHead className="text-right">موجودہ سٹاک</TableHead>
-                      <TableHead className="text-right">حالت</TableHead>
+                      <TableHead className="text-left">Name</TableHead>
+                      <TableHead className="text-left">Category</TableHead>
+                      <TableHead className="text-left">Current Stock</TableHead>
+                      <TableHead className="text-left">Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -480,13 +480,13 @@ export function ReportsView() {
                       const isLow = !isZero && (p.stock ?? 0) <= (p.minStock || 5);
                       return (
                         <TableRow key={p.id}>
-                          <TableCell className="text-right font-medium max-w-[160px] truncate">
+                          <TableCell className="text-left font-medium max-w-[160px] truncate">
                             {p.name}
                           </TableCell>
-                          <TableCell className="text-right text-muted-foreground">
+                          <TableCell className="text-left text-muted-foreground">
                             {p.category?.name || "—"}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-left">
                             <span
                               className={
                                 isZero
@@ -499,17 +499,17 @@ export function ReportsView() {
                               {p.stock}
                             </span>
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-left">
                             {isZero ? (
                               <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
-                                ختم
+                                Out of Stock
                               </Badge>
                             ) : isLow ? (
                               <Badge className="bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
-                                کم
+                                Low
                               </Badge>
                             ) : (
-                              <Badge variant="secondary">کافی</Badge>
+                              <Badge variant="secondary">Sufficient</Badge>
                             )}
                           </TableCell>
                         </TableRow>
@@ -527,9 +527,9 @@ export function ReportsView() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <TrendingUp className="w-5 h-5 text-emerald-600" />
-              خلاصہ فروخت
+              Sales Summary
             </CardTitle>
-            <CardDescription>اس مدت کا مالی خلاصہ</CardDescription>
+            <CardDescription>Financial summary for this period</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             {isLoading ? (
@@ -539,22 +539,22 @@ export function ReportsView() {
             ) : (
               <>
                 <SummaryRow
-                  label="کل فروخت (Revenue)"
+                  label="Revenue"
                   value={formatMoney(data?.totalRevenue ?? 0, currency)}
                 />
                 <SummaryRow
-                  label="کل کاسٹ (Cost)"
+                  label="Cost"
                   value={formatMoney(data?.totalCost ?? 0, currency)}
                   valueClass="text-amber-600"
                 />
                 <SummaryRow
-                  label="ٹیکس (Tax)"
+                  label="Tax"
                   value={formatMoney(data?.totalTax ?? 0, currency)}
                   valueClass="text-muted-foreground"
                 />
                 <div className="border-t pt-3">
                   <SummaryRow
-                    label="خالص منافع (Profit)"
+                    label="Net Profit"
                     value={formatMoney(data?.totalProfit ?? 0, currency)}
                     valueClass="text-emerald-700 font-bold text-lg"
                     labelClass="font-semibold"
@@ -562,13 +562,13 @@ export function ReportsView() {
                 </div>
                 <div className="grid grid-cols-2 gap-3 pt-2">
                   <div className="rounded-lg bg-emerald-50 p-3 text-center">
-                    <div className="text-xs text-emerald-700">انوائسز</div>
+                    <div className="text-xs text-emerald-700">Invoices</div>
                     <div className="text-lg font-bold text-emerald-700">
                       {data?.totalSales ?? 0}
                     </div>
                   </div>
                   <div className="rounded-lg bg-teal-50 p-3 text-center">
-                    <div className="text-xs text-teal-700">اوسط فروخت</div>
+                    <div className="text-xs text-teal-700">Avg per Invoice</div>
                     <div className="text-lg font-bold text-teal-700">
                       {formatMoney(
                         (data?.totalRevenue ?? 0) / Math.max(data?.totalSales ?? 1, 1),

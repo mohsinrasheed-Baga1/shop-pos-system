@@ -26,14 +26,14 @@ export function LoginScreen() {
         redirect: false,
       });
       if (res?.error) {
-        toast.error("غلط ای میل یا پاس ورڈ");
+        toast.error("Invalid email or password");
         setLoading(false);
         return;
       }
-      toast.success("خوش آمدید!");
+      toast.success("Welcome!");
       router.refresh();
     } catch (err) {
-      toast.error("کوئی مسئلہ پیش آیا");
+      toast.error("Something went wrong");
       setLoading(false);
     }
   }
@@ -45,15 +45,15 @@ export function LoginScreen() {
           <div className="mx-auto w-16 h-16 rounded-2xl bg-emerald-600 flex items-center justify-center shadow-lg">
             <Store className="w-9 h-9 text-white" />
           </div>
-          <CardTitle className="text-2xl font-bold">دکان POS سسٹم</CardTitle>
+          <CardTitle className="text-2xl font-bold">Shop POS System</CardTitle>
           <CardDescription className="text-base">
-            اپنا اکاؤنٹ استعمال کر کے لاگ ان ہوں
+            Sign in to your account to continue
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">ای میل</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -61,12 +61,11 @@ export function LoginScreen() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@pos.local"
                 required
-                dir="ltr"
                 className="text-left"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">پاس ورڈ</Label>
+              <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 type="password"
@@ -74,7 +73,6 @@ export function LoginScreen() {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                dir="ltr"
                 className="text-left"
               />
             </div>
@@ -86,7 +84,7 @@ export function LoginScreen() {
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                "لاگ ان"
+                "Sign In"
               )}
             </Button>
           </form>
@@ -94,13 +92,13 @@ export function LoginScreen() {
           <div className="mt-6 pt-4 border-t space-y-2 text-sm text-muted-foreground">
             <div className="flex items-center gap-2">
               <ScanBarcode className="w-4 h-4 text-emerald-600" />
-              <span>بارکوڈ سکینر سے فروخت</span>
+              <span>Barcode scanner for fast billing</span>
             </div>
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
-              <span>ملٹی یوزر مینجمنٹ</span>
+              <span>Multi-user role management</span>
             </div>
-            <div className="mt-3 p-3 rounded-lg bg-muted/50 text-xs space-y-1" dir="ltr">
+            <div className="mt-3 p-3 rounded-lg bg-muted/50 text-xs space-y-1">
               <div className="font-semibold">Demo accounts:</div>
               <div>Admin: admin@pos.local / admin123</div>
               <div>Cashier: cashier@pos.local / cashier123</div>

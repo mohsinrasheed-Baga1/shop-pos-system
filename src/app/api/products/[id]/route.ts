@@ -12,7 +12,7 @@ export async function PUT(
   const body = await req.json();
 
   const existing = await db.product.findUnique({ where: { id } });
-  if (!existing) return NextResponse.json({ error: "نہیں ملا" }, { status: 404 });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const prevStock = existing.stock;
   const newStock = Number(body.stock);
@@ -42,7 +42,7 @@ export async function PUT(
         productId: product.id,
         type: "ADJUSTMENT",
         quantity: stockDiff,
-        note: body.stockNote || "سٹاک تبدیلی",
+        note: body.stockNote || "Stock adjustment",
       },
     });
   }
@@ -57,7 +57,7 @@ export async function DELETE(
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.role === "CASHIER") {
-    return NextResponse.json({ error: "صرف ایڈمن/مینجر" }, { status: 403 });
+    return NextResponse.json({ error: "Admin or manager only" }, { status: 403 });
   }
   const { id } = await params;
   await db.product.delete({ where: { id } });

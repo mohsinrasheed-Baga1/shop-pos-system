@@ -1,6 +1,11 @@
 {
-  "name": "nextjs_tailwind_shadcn_ts",
-  "version": "0.2.0",
+  "name": "shop-pos-system",
+  "version": "1.0.0",
+  "description": "Shop POS System - Point of Sale with barcode scanner, products and sales management",
+  "author": "Mohsin Rasheed",
+  "license": "MIT",
+  "homepage": "https://github.com/mohsinrasheed-Baga1/shop-pos-system",
+  "main": "electron/main.cjs",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -10,7 +15,41 @@
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "electron:build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/ && node scripts/prepare-electron.mjs && electron-builder",
+    "electron:start": "electron electron/main.cjs"
+  },
+  "build": {
+    "appId": "com.mohsinrasheed.shoppos",
+    "productName": "Shop POS System",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/main.cjs",
+      "electron/preload.cjs",
+      "electron/package.json",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!**/._*"
+    ],
+    "extraResources": [
+      {
+        "from": "dist-electron-server",
+        "to": "server",
+        "filter": ["**/*"]
+      }
+    ],
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Office",
+      "icon": "build/icon.png",
+      "maintainer": "Mohsin Rasheed"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "build/icon.png"
+    }
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -92,6 +131,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "bun-types": "^1.3.4",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "^16.1.1",
     "tailwindcss": "^4",

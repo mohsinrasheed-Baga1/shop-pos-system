@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const exists = await db.category.findUnique({ where: { name: body.name } });
   if (exists) {
-    return NextResponse.json({ error: "کیٹگری موجود ہے" }, { status: 400 });
+    return NextResponse.json({ error: "Category already exists" }, { status: 400 });
   }
   const category = await db.category.create({
     data: { name: body.name, icon: body.icon || null },

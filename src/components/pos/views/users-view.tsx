@@ -49,9 +49,9 @@ import {
 /* ---------- helpers ---------- */
 
 const ROLE_LABELS: Record<Role, string> = {
-  ADMIN: "ایڈمن",
-  MANAGER: "مینجر",
-  CASHIER: "کیشیئر",
+  ADMIN: "Admin",
+  MANAGER: "Manager",
+  CASHIER: "Cashier",
 };
 
 function roleBadgeClass(role: Role): string {
@@ -69,7 +69,7 @@ function roleBadgeClass(role: Role): string {
 function formatDate(iso: string): string {
   try {
     const d = new Date(iso);
-    return new Intl.DateTimeFormat("ur-PK", {
+    return new Intl.DateTimeFormat("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -128,7 +128,7 @@ export function UsersView() {
         if (!cancelled) setUsers(data.users ?? []);
       } catch (err) {
         if (!cancelled) {
-          toast.error("صارفین کی فہرست لوڈ نہیں ہو سکی");
+          toast.error("Failed to load users list");
           setUsers([]);
         }
       } finally {
@@ -154,13 +154,13 @@ export function UsersView() {
   const handleCreated = (u: User) => {
     setUsers((prev) => [u, ...prev]);
     setDialogOpen(false);
-    toast.success("نیا صارف کامیابی سے بنا");
+    toast.success("User created");
   };
 
   const handleUpdated = (u: User) => {
     setUsers((prev) => prev.map((x) => (x.id === u.id ? u : x)));
     setDialogOpen(false);
-    toast.success("صارف کی معلومات اپ ڈیٹ ہو گئیں");
+    toast.success("User updated");
   };
 
   const confirmDelete = async () => {
@@ -175,10 +175,10 @@ export function UsersView() {
         throw new Error(data?.error || "delete failed");
       }
       setUsers((prev) => prev.filter((x) => x.id !== deleteTarget.id));
-      toast.success("صارف حذف کر دیا گیا");
+      toast.success("User deleted");
       setDeleteTarget(null);
     } catch (e) {
-      toast.error("صارف حذف کرنے میں ناکامی");
+      toast.error("Failed to delete user");
     } finally {
       setDeleting(false);
     }
@@ -186,7 +186,7 @@ export function UsersView() {
 
   /* ---------- render ---------- */
   return (
-    <div className="space-y-6 p-4 md:p-6" dir="rtl">
+    <div className="space-y-6 p-4 md:p-6" dir="ltr">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
@@ -195,10 +195,10 @@ export function UsersView() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              صارفین کا انتظام
+              User Management
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              سسٹم کے صارفین کو شامل کریں، ترمیم کریں یا حذف کریں۔
+              Add, edit, or remove system users.
             </p>
           </div>
         </div>
@@ -211,7 +211,7 @@ export function UsersView() {
             className="gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-            تازہ کریں
+            Refresh
           </Button>
           <Button
             size="sm"
@@ -219,28 +219,28 @@ export function UsersView() {
             className="gap-2 bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-600"
           >
             <Plus className="h-4 w-4" />
-            نیا یوزر
+            New User
           </Button>
         </div>
       </div>
 
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="کل صارفین" value={users.length} loading={loading} />
+        <StatCard label="Total Users" value={users.length} loading={loading} />
         <StatCard
-          label="ایڈمن"
+          label="Admins"
           value={users.filter((u) => u.role === "ADMIN").length}
           loading={loading}
           accent="emerald"
         />
         <StatCard
-          label="مینجر"
+          label="Managers"
           value={users.filter((u) => u.role === "MANAGER").length}
           loading={loading}
           accent="amber"
         />
         <StatCard
-          label="کیشیئر"
+          label="Cashiers"
           value={users.filter((u) => u.role === "CASHIER").length}
           loading={loading}
           accent="zinc"
@@ -253,11 +253,11 @@ export function UsersView() {
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-emerald-600" />
             <h2 className="text-sm font-semibold text-foreground">
-              تمام صارفین
+              All Users
             </h2>
           </div>
           <span className="text-xs text-muted-foreground">
-            {loading ? "لوڈ ہو رہا ہے…" : `${users.length} صارفین`}
+            {loading ? "Loading…" : `${users.length} user${users.length === 1 ? "" : "s"}`}
           </span>
         </div>
 
@@ -265,14 +265,14 @@ export function UsersView() {
           <Table className="min-w-[760px]">
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="text-right font-semibold">#</TableHead>
-                <TableHead className="text-right font-semibold">نام</TableHead>
-                <TableHead className="text-right font-semibold">ای میل</TableHead>
-                <TableHead className="text-right font-semibold">فون</TableHead>
-                <TableHead className="text-right font-semibold">رول</TableHead>
-                <TableHead className="text-right font-semibold">حالت</TableHead>
-                <TableHead className="text-right font-semibold">تخلیق کی تاریخ</TableHead>
-                <TableHead className="text-center font-semibold">اقدامات</TableHead>
+                <TableHead className="text-left font-semibold">#</TableHead>
+                <TableHead className="text-left font-semibold">Name</TableHead>
+                <TableHead className="text-left font-semibold">Email</TableHead>
+                <TableHead className="text-left font-semibold">Phone</TableHead>
+                <TableHead className="text-left font-semibold">Role</TableHead>
+                <TableHead className="text-left font-semibold">Status</TableHead>
+                <TableHead className="text-left font-semibold">Created At</TableHead>
+                <TableHead className="text-center font-semibold">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -289,7 +289,7 @@ export function UsersView() {
                   <TableCell colSpan={8} className="h-32 text-center">
                     <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                       <UsersIcon className="h-8 w-8 opacity-40" />
-                      <p className="text-sm">کوئی صارف موجود نہیں۔ نیا یوزر بنانے کے لیے اوپر دیے گئے بٹن پر کلک کریں۔</p>
+                      <p className="text-sm">No users found. Click the &quot;New User&quot; button above to create one.</p>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -305,10 +305,10 @@ export function UsersView() {
                     <TableCell className="font-medium text-foreground">
                       {u.name}
                     </TableCell>
-                    <TableCell className="text-muted-foreground" dir="ltr">
+                    <TableCell className="text-muted-foreground">
                       {u.email}
                     </TableCell>
-                    <TableCell className="text-muted-foreground" dir="ltr">
+                    <TableCell className="text-muted-foreground">
                       {u.phone || "—"}
                     </TableCell>
                     <TableCell>
@@ -322,11 +322,11 @@ export function UsersView() {
                     <TableCell>
                       {u.active ? (
                         <Badge className="bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-200 dark:border-emerald-800">
-                          فعال
+                          Active
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-muted-foreground">
-                          غیر فعال
+                          Inactive
                         </Badge>
                       )}
                     </TableCell>
@@ -340,8 +340,8 @@ export function UsersView() {
                           variant="ghost"
                           onClick={() => openEdit(u)}
                           className="h-8 w-8 p-0 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950"
-                          aria-label="ترمیم"
-                          title="ترمیم"
+                          aria-label="Edit"
+                          title="Edit"
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -350,8 +350,8 @@ export function UsersView() {
                           variant="ghost"
                           onClick={() => setDeleteTarget(u)}
                           className="h-8 w-8 p-0 text-rose-600 hover:bg-rose-100 hover:text-rose-700 dark:text-rose-300 dark:hover:bg-rose-950"
-                          aria-label="حذف کریں"
-                          title="حذف کریں"
+                          aria-label="Delete"
+                          title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -386,17 +386,17 @@ export function UsersView() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>صارف حذف کریں؟</AlertDialogTitle>
+            <AlertDialogTitle>Delete User?</AlertDialogTitle>
             <AlertDialogDescription>
-              کیا آپ واقعی{" "}
+              Are you sure you want to delete{" "}
               <span className="font-semibold text-foreground">
                 {deleteTarget?.name}
               </span>{" "}
-              ({deleteTarget?.email}) کو حذف کرنا چاہتے ہیں؟ یہ عمل واپس نہیں ہو سکتا۔
+              ({deleteTarget?.email})? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>منسوخ کریں</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
@@ -405,7 +405,7 @@ export function UsersView() {
               disabled={deleting}
               className="bg-rose-600 text-white hover:bg-rose-700 focus-visible:ring-rose-600"
             >
-              {deleting ? "حذف کیا جا رہا ہے…" : "ہاں، حذف کریں"}
+              {deleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -495,17 +495,17 @@ function UserDialog({
 
   const validate = (): boolean => {
     const errs: Partial<Record<keyof UserFormState, string>> = {};
-    if (!form.name.trim()) errs.name = "نام درکار ہے";
-    if (!form.email.trim()) errs.email = "ای میل درکار ہے";
+    if (!form.name.trim()) errs.name = "Name is required";
+    if (!form.email.trim()) errs.email = "Email is required";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))
-      errs.email = "درست ای میل درج کریں";
-    if (!isEdit && !form.password) errs.password = "پاس ورڈ درکار ہے";
+      errs.email = "Please enter a valid email";
+    if (!isEdit && !form.password) errs.password = "Password is required (min 6 chars)";
     else if (form.password && form.password.length < 6)
-      errs.password = "پاس ورڈ کم از کم 6 حروف کا ہو";
+      errs.password = "Password must be at least 6 characters";
 
     setErrors(errs);
     if (Object.keys(errs).length > 0) {
-      toast.error("براہ کرم فارم کی غلطیاں درست کریں");
+      toast.error("Please fix the form errors");
       return false;
     }
     return true;
@@ -544,7 +544,7 @@ function UserDialog({
       else onCreated(user);
     } catch (err) {
       toast.error(
-        isEdit ? "صارف اپ ڈیٹ نہیں ہو سکا" : "نیا صارف بنانے میں ناکامی"
+        isEdit ? "Failed to update user" : "Failed to create user"
       );
     } finally {
       setSaving(false);
@@ -553,18 +553,18 @@ function UserDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]" dir="rtl">
+      <DialogContent className="sm:max-w-[520px]" dir="ltr">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
               <UsersIcon className="h-4 w-4" />
             </span>
-            {isEdit ? "صارف میں ترمیم" : "نیا صارف بنائیں"}
+            {isEdit ? "Edit User" : "Add User"}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "صارف کی معلومات اپ ڈیٹ کریں۔ پاس ورڈ خالی چھوڑنے پر پرانا پاس ورڈ برقرار رہے گا۔"
-              : "نیا صارف بنانے کے لیے تمام ضروری خانے پُر کریں۔"}
+              ? "Update the user details. Leave the password blank to keep the existing one."
+              : "Fill in all required fields to create a new user."}
           </DialogDescription>
         </DialogHeader>
 
@@ -573,13 +573,13 @@ function UserDialog({
             {/* Name */}
             <div className="space-y-1.5">
               <Label htmlFor="u-name">
-                نام <span className="text-rose-500">*</span>
+                Full Name <span className="text-rose-500">*</span>
               </Label>
               <Input
                 id="u-name"
                 value={form.name}
                 onChange={(e) => update("name", e.target.value)}
-                placeholder="مثلاً احمد علی"
+                placeholder="e.g. John Doe"
                 disabled={saving}
                 aria-invalid={!!errors.name}
               />
@@ -591,18 +591,16 @@ function UserDialog({
             {/* Email */}
             <div className="space-y-1.5">
               <Label htmlFor="u-email">
-                ای میل <span className="text-rose-500">*</span>
+                Email <span className="text-rose-500">*</span>
               </Label>
               <Input
                 id="u-email"
                 type="email"
-                dir="ltr"
                 value={form.email}
                 onChange={(e) => update("email", e.target.value)}
                 placeholder="example@pos.local"
                 disabled={saving}
                 aria-invalid={!!errors.email}
-                className="text-right"
               />
               {errors.email && (
                 <p className="text-xs text-rose-500">{errors.email}</p>
@@ -611,22 +609,20 @@ function UserDialog({
 
             {/* Phone */}
             <div className="space-y-1.5">
-              <Label htmlFor="u-phone">فون نمبر</Label>
+              <Label htmlFor="u-phone">Phone</Label>
               <Input
                 id="u-phone"
-                dir="ltr"
                 value={form.phone}
                 onChange={(e) => update("phone", e.target.value)}
                 placeholder="0300-1234567"
                 disabled={saving}
-                className="text-right"
               />
             </div>
 
             {/* Role */}
             <div className="space-y-1.5">
               <Label htmlFor="u-role">
-                رول <span className="text-rose-500">*</span>
+                Role <span className="text-rose-500">*</span>
               </Label>
               <Select
                 value={form.role}
@@ -634,12 +630,12 @@ function UserDialog({
                 disabled={saving}
               >
                 <SelectTrigger id="u-role" className="w-full">
-                  <SelectValue placeholder="رول منتخب کریں" />
+                  <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ADMIN">ایڈمن</SelectItem>
-                  <SelectItem value="MANAGER">مینجر</SelectItem>
-                  <SelectItem value="CASHIER">کیشیئر</SelectItem>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
+                  <SelectItem value="MANAGER">Manager</SelectItem>
+                  <SelectItem value="CASHIER">Cashier</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -647,10 +643,10 @@ function UserDialog({
             {/* Password */}
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="u-pass">
-                پاس ورڈ{" "}
+                Password{" "}
                 {isEdit ? (
                   <span className="text-xs text-muted-foreground">
-                    (خالی چھوڑیں تو پرانا برقرار رہے گا)
+                    (leave blank to keep the existing password)
                   </span>
                 ) : (
                   <span className="text-rose-500">*</span>
@@ -659,13 +655,11 @@ function UserDialog({
               <Input
                 id="u-pass"
                 type="password"
-                dir="ltr"
                 value={form.password}
                 onChange={(e) => update("password", e.target.value)}
-                placeholder={isEdit ? "نئی پاس ورڈ (اختیاری)" : "کم از کم 6 حروف"}
+                placeholder={isEdit ? "New password (optional)" : "Min 6 characters"}
                 disabled={saving}
                 aria-invalid={!!errors.password}
-                className="text-right"
               />
               {errors.password && (
                 <p className="text-xs text-rose-500">{errors.password}</p>
@@ -676,10 +670,10 @@ function UserDialog({
             <div className="flex items-center justify-between rounded-lg border bg-muted/30 p-3 sm:col-span-2">
               <div>
                 <Label htmlFor="u-active" className="cursor-pointer">
-                  فعال حالت
+                  Active Status
                 </Label>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  غیر فعال صارف سسٹم میں لاگ ان نہیں کر سکتے۔
+                  Inactive users cannot log in to the system.
                 </p>
               </div>
               <Switch
@@ -698,7 +692,7 @@ function UserDialog({
               onClick={() => onOpenChange(false)}
               disabled={saving}
             >
-              منسوخ کریں
+              Cancel
             </Button>
             <Button
               type="submit"
@@ -707,11 +701,11 @@ function UserDialog({
             >
               {saving
                 ? isEdit
-                  ? "اپ ڈیٹ ہو رہا ہے…"
-                  : "بنایا جا رہا ہے…"
+                  ? "Saving…"
+                  : "Creating…"
                 : isEdit
-                ? "تبدیلیاں محفوظ کریں"
-                : "صارف بنائیں"}
+                ? "Save Changes"
+                : "Save"}
             </Button>
           </DialogFooter>
         </form>

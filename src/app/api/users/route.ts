@@ -7,7 +7,7 @@ export async function GET() {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.role !== "ADMIN") {
-    return NextResponse.json({ error: "صرف ایڈمن" }, { status: 403 });
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
   const users = await db.user.findMany({
     orderBy: { createdAt: "desc" },
@@ -27,16 +27,16 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const user = await getSessionUser();
   if (!user || user.role !== "ADMIN") {
-    return NextResponse.json({ error: "صرف ایڈمن" }, { status: 403 });
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
   const body = await req.json();
   const email = body.email?.toLowerCase().trim();
   if (!email || !body.name || !body.password) {
-    return NextResponse.json({ error: "تمام ضروری فیلڈز بھریں" }, { status: 400 });
+    return NextResponse.json({ error: "Fill all required fields" }, { status: 400 });
   }
   const dup = await db.user.findUnique({ where: { email } });
   if (dup) {
-    return NextResponse.json({ error: "ای میل موجود ہے" }, { status: 400 });
+    return NextResponse.json({ error: "Email already exists" }, { status: 400 });
   }
   const hash = await bcrypt.hash(body.password, 10);
   const created = await db.user.create({

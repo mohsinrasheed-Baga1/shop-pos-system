@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code") || "";
-  if (!code) return NextResponse.json({ error: "بارکوڈ درکار ہے" }, { status: 400 });
+  if (!code) return NextResponse.json({ error: "Barcode is required" }, { status: 400 });
 
   const product = await db.product.findUnique({
     where: { barcode: code },

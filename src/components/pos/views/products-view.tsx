@@ -60,14 +60,14 @@ interface ProductsViewProps {
 }
 
 const UNITS = [
-  { v: "piece", l: "پیس" },
-  { v: "kg", l: "کلو" },
-  { v: "gram", l: "گرام" },
-  { v: "litre", l: "لیٹر" },
-  { v: "ml", l: "ملی لیٹر" },
-  { v: "dozen", l: "درجن" },
-  { v: "metre", l: "میٹر" },
-  { v: "feet", l: "فٹ" },
+  { v: "piece", l: "Piece" },
+  { v: "kg", l: "Kg" },
+  { v: "gram", l: "Gram" },
+  { v: "litre", l: "Litre" },
+  { v: "ml", l: "Millilitre" },
+  { v: "dozen", l: "Dozen" },
+  { v: "metre", l: "Metre" },
+  { v: "feet", l: "Feet" },
 ];
 
 const emptyForm = {
@@ -110,7 +110,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
       const data = await res.json();
       setProducts(data.products || []);
     } catch {
-      toast.error("پروڈکٹس لوڈ نہیں ہوئے");
+      toast.error("Failed to load products");
     } finally {
       setLoading(false);
     }
@@ -159,11 +159,11 @@ export function ProductsView({ userRole }: ProductsViewProps) {
 
   async function handleSave() {
     if (!form.name.trim()) {
-      toast.error("نام درکار ہے");
+      toast.error("Name is required");
       return;
     }
     if (Number(form.salePrice) <= 0) {
-      toast.error("فروخت قیمت درکار ہے");
+      toast.error("Sale price is required");
       return;
     }
     setSaving(true);
@@ -192,15 +192,15 @@ export function ProductsView({ userRole }: ProductsViewProps) {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || "محفوظ نہیں ہوا");
+        toast.error(data.error || "Failed to save");
         setSaving(false);
         return;
       }
-      toast.success(editId ? "اپڈیٹ ہو گیا" : "پروڈکٹ شامل ہو گیا");
+      toast.success(editId ? "Product updated" : "Product added");
       setDialogOpen(false);
       loadProducts();
     } catch {
-      toast.error("نیٹ ورک مسئلہ");
+      toast.error("Network error");
     } finally {
       setSaving(false);
     }
@@ -214,14 +214,14 @@ export function ProductsView({ userRole }: ProductsViewProps) {
       });
       if (!res.ok) {
         const d = await res.json();
-        toast.error(d.error || "حذف نہیں ہوا");
+        toast.error(d.error || "Failed to delete");
         return;
       }
-      toast.success("پروڈکٹ حذف ہو گیا");
+      toast.success("Product deleted");
       setDeleteId(null);
       loadProducts();
     } catch {
-      toast.error("نیٹ ورک مسئلہ");
+      toast.error("Network error");
     }
   }
 
@@ -231,19 +231,19 @@ export function ProductsView({ userRole }: ProductsViewProps) {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Package className="w-6 h-6 text-emerald-600" />
-            پروڈکٹس
+            Products
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            اپنی دکان کی ساری اشیاء مینج کریں
+            Manage all items in your shop
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={loadProducts}>
-            <RefreshCw className="w-4 h-4 ml-2" /> تازہ
+            <RefreshCw className="w-4 h-4 mr-2" /> Refresh
           </Button>
           {canManage && (
             <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openAdd}>
-              <Plus className="w-4 h-4 ml-2" /> نیا پروڈکٹ
+              <Plus className="w-4 h-4 mr-2" /> New Product
             </Button>
           )}
         </div>
@@ -251,20 +251,20 @@ export function ProductsView({ userRole }: ProductsViewProps) {
 
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="نام یا بارکوڈ سے تلاش کریں..."
+            placeholder="Search by name or barcode..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="pr-10"
+            className="pl-10"
           />
         </div>
         <Select value={activeCat} onValueChange={setActiveCat}>
           <SelectTrigger className="sm:w-56">
-            <SelectValue placeholder="کیٹگری" />
+            <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">تمام</SelectItem>
+            <SelectItem value="all">All</SelectItem>
             {categories.map((c) => (
               <SelectItem key={c.id} value={c.id}>
                 {c.name}
@@ -285,20 +285,20 @@ export function ProductsView({ userRole }: ProductsViewProps) {
           ) : products.length === 0 ? (
             <div className="py-12 text-center text-muted-foreground">
               <Package className="w-10 h-10 mx-auto mb-2 opacity-50" />
-              کوئی پروڈکٹ نہیں ملا
+              No products found
             </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>نام</TableHead>
-                    <TableHead>بارکوڈ</TableHead>
-                    <TableHead>کیٹگری</TableHead>
-                    <TableHead className="text-left">خرید</TableHead>
-                    <TableHead className="text-left">فروخت</TableHead>
-                    <TableHead className="text-left">سٹاک</TableHead>
-                    <TableHead className="text-left">اقدامات</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Barcode</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Cost</TableHead>
+                    <TableHead className="text-right">Sale</TableHead>
+                    <TableHead className="text-right">Stock</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -317,22 +317,22 @@ export function ProductsView({ userRole }: ProductsViewProps) {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell dir="ltr" className="text-xs font-mono">
+                      <TableCell className="text-xs font-mono">
                         {p.barcode}
                         {p.barcodeType !== "COMPANY" && (
-                          <Badge variant="outline" className="mr-1 text-[10px]">
-                            آٹو
+                          <Badge variant="outline" className="ml-1 text-[10px]">
+                            Auto
                           </Badge>
                         )}
                       </TableCell>
                       <TableCell>{p.category?.name || "-"}</TableCell>
-                      <TableCell dir="ltr" className="text-left text-muted-foreground">
+                      <TableCell className="text-right text-muted-foreground">
                         {formatMoney(p.costPrice)}
                       </TableCell>
-                      <TableCell dir="ltr" className="text-left font-bold text-emerald-700">
+                      <TableCell className="text-right font-bold text-emerald-700">
                         {formatMoney(p.salePrice)}
                       </TableCell>
-                      <TableCell dir="ltr" className="text-left">
+                      <TableCell className="text-right">
                         <span
                           className={`font-medium ${
                             p.stock <= 0
@@ -345,17 +345,17 @@ export function ProductsView({ userRole }: ProductsViewProps) {
                           {p.stock}
                         </span>
                         {p.stock <= p.minStock && (
-                          <AlertTriangle className="w-3 h-3 inline ml-1 text-amber-500" />
+                          <AlertTriangle className="w-3 h-3 inline mr-1 text-amber-500" />
                         )}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
+                      <TableCell className="text-right">
+                        <div className="flex gap-1 justify-end">
                           <Button
                             size="icon"
                             variant="ghost"
                             className="h-8 w-8"
                             onClick={() => setPrintProduct(p)}
-                            title="بارکوڈ پرنٹ"
+                            title="Print Barcode"
                           >
                             <BarcodeIcon className="w-4 h-4 text-emerald-600" />
                           </Button>
@@ -395,16 +395,16 @@ export function ProductsView({ userRole }: ProductsViewProps) {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editId ? "پروڈکٹ تبدیل کریں" : "نیا پروڈکٹ شامل کریں"}
+              {editId ? "Edit Product" : "Add New Product"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>پروڈکٹ کا نام *</Label>
+              <Label>Product Name *</Label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="مثال: چینی، گھی، چاول"
+                placeholder="e.g. Sugar, Ghee, Rice"
               />
             </div>
 
@@ -412,7 +412,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-2">
                   <BarcodeIcon className="w-4 h-4 text-emerald-600" />
-                  کمپنی کا بارکوڈ موجود ہے؟
+                  Has company barcode?
                 </Label>
                 <Switch
                   checked={form.hasBarcode}
@@ -423,14 +423,13 @@ export function ProductsView({ userRole }: ProductsViewProps) {
                 <Input
                   value={form.barcode}
                   onChange={(e) => setForm({ ...form, barcode: e.target.value })}
-                  placeholder="بارکوڈ سکین یا ٹائپ کریں..."
-                  dir="ltr"
+                  placeholder="Scan or type the barcode..."
                   className="text-left"
                 />
               ) : (
                 <p className="text-xs text-emerald-700">
-                  ✓ اس پروڈکٹ کا بارکوڈ خودکار بنایا جائے گا (چینی، گھی وغیرہ
-                  کے لیے بہترین)
+                  ✓ A barcode will be auto-generated for this product (best for
+                  loose items like sugar, ghee, etc.)
                 </p>
               )}
               {form.barcode && (
@@ -446,7 +445,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>کیٹگری</Label>
+                <Label>Category</Label>
                 <Select
                   value={form.categoryId || "none"}
                   onValueChange={(v) =>
@@ -454,10 +453,10 @@ export function ProductsView({ userRole }: ProductsViewProps) {
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="منتخب کریں" />
+                    <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">بغیر کیٹگری</SelectItem>
+                    <SelectItem value="none">No category</SelectItem>
                     {categories.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
@@ -467,7 +466,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label>اکائی</Label>
+                <Label>Unit</Label>
                 <Select
                   value={form.unit}
                   onValueChange={(v) => setForm({ ...form, unit: v })}
@@ -488,22 +487,20 @@ export function ProductsView({ userRole }: ProductsViewProps) {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label>خرید قیمت</Label>
+                <Label>Cost Price</Label>
                 <Input
                   type="number"
                   value={form.costPrice}
                   onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
-                  dir="ltr"
                   className="text-left"
                 />
               </div>
               <div className="space-y-2">
-                <Label>فروخت قیمت *</Label>
+                <Label>Sale Price *</Label>
                 <Input
                   type="number"
                   value={form.salePrice}
                   onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
-                  dir="ltr"
                   className="text-left"
                 />
               </div>
@@ -511,39 +508,36 @@ export function ProductsView({ userRole }: ProductsViewProps) {
 
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-2">
-                <Label>سٹاک</Label>
+                <Label>Stock</Label>
                 <Input
                   type="number"
                   value={form.stock}
                   onChange={(e) => setForm({ ...form, stock: e.target.value })}
-                  dir="ltr"
                   className="text-left"
                 />
               </div>
               <div className="space-y-2">
-                <Label>کم سٹاک الرٹ</Label>
+                <Label>Low Stock Alert</Label>
                 <Input
                   type="number"
                   value={form.minStock}
                   onChange={(e) => setForm({ ...form, minStock: e.target.value })}
-                  dir="ltr"
                   className="text-left"
                 />
               </div>
               <div className="space-y-2">
-                <Label>ٹیکس %</Label>
+                <Label>Tax %</Label>
                 <Input
                   type="number"
                   value={form.taxRate}
                   onChange={(e) => setForm({ ...form, taxRate: e.target.value })}
-                  dir="ltr"
                   className="text-left"
                 />
               </div>
             </div>
 
             <div className="flex items-center justify-between rounded-lg border p-3">
-              <Label>پروڈکٹ فعال ہے</Label>
+              <Label>Product is active</Label>
               <Switch
                 checked={form.active}
                 onCheckedChange={(c) => setForm({ ...form, active: c })}
@@ -556,14 +550,14 @@ export function ProductsView({ userRole }: ProductsViewProps) {
               onClick={() => setDialogOpen(false)}
               disabled={saving}
             >
-              منسوخ
+              Cancel
             </Button>
             <Button
               className="bg-emerald-600 hover:bg-emerald-700"
               onClick={handleSave}
               disabled={saving}
             >
-              {saving ? "محفوظ ہو رہا..." : "محفوظ کریں"}
+              {saving ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -573,18 +567,18 @@ export function ProductsView({ userRole }: ProductsViewProps) {
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>پروڈکٹ حذف کریں؟</AlertDialogTitle>
+            <AlertDialogTitle>Delete product?</AlertDialogTitle>
             <AlertDialogDescription>
-              یہ عمل واپس نہیں ہوگا۔
+              This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>منسوخ</AlertDialogCancel>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-red-600 hover:bg-red-700"
               onClick={handleDelete}
             >
-              حذف کریں
+              Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -638,19 +632,18 @@ function BarcodePrintDialog({
     <Dialog open={!!product} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>بارکوڈ لیبل پرنٹ</DialogTitle>
+          <DialogTitle>Print Barcode Label</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="text-center font-medium">{product.name}</div>
           <div className="flex items-center gap-2">
-            <Label className="whitespace-nowrap">تعداد</Label>
+            <Label className="whitespace-nowrap">Quantity</Label>
             <Input
               type="number"
               min={1}
               max={100}
               value={count}
               onChange={(e) => setCount(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
-              dir="ltr"
               className="text-left w-24"
             />
           </div>
@@ -676,10 +669,10 @@ function BarcodePrintDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            بند کریں
+            Close
           </Button>
           <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handlePrint}>
-            <Printer className="w-4 h-4 ml-2" /> پرنٹ
+            <Printer className="w-4 h-4 mr-2" /> Print
           </Button>
         </DialogFooter>
       </DialogContent>

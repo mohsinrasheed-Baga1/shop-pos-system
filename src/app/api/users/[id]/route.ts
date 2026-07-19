@@ -9,7 +9,7 @@ export async function PUT(
 ) {
   const user = await getSessionUser();
   if (!user || user.role !== "ADMIN") {
-    return NextResponse.json({ error: "صرف ایڈمن" }, { status: 403 });
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
   const { id } = await params;
   const body = await req.json();
@@ -46,11 +46,11 @@ export async function DELETE(
 ) {
   const user = await getSessionUser();
   if (!user || user.role !== "ADMIN") {
-    return NextResponse.json({ error: "صرف ایڈمن" }, { status: 403 });
+    return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
   const { id } = await params;
   if (id === user.id) {
-    return NextResponse.json({ error: "اپنا اکاؤنٹ نہیں مٹا سکتے" }, { status: 400 });
+    return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
   }
   await db.user.delete({ where: { id } });
   return NextResponse.json({ ok: true });

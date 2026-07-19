@@ -85,7 +85,7 @@ export function SettingsView() {
           });
         }
       } catch {
-        toast.error("سیٹنگز لوڈ نہیں ہو سکیں");
+        toast.error("Could not load settings");
       } finally {
         if (active) setLoading(false);
       }
@@ -142,9 +142,9 @@ export function SettingsView() {
           invoicePrefix: s.invoicePrefix || "INV",
         });
       }
-      toast.success("سیٹنگز محفوظ ہو گئیں");
+      toast.success("Settings saved");
     } catch (err: any) {
-      toast.error(err?.message || "سیٹنگز محفوظ نہیں ہو سکیں");
+      toast.error(err?.message || "Could not save settings");
     } finally {
       setSaving(false);
     }
@@ -152,7 +152,7 @@ export function SettingsView() {
 
   if (loading) {
     return (
-      <div className="space-y-4 max-w-5xl mx-auto" dir="rtl">
+      <div className="space-y-4 max-w-5xl mx-auto" dir="ltr">
         <Skeleton className="h-24 w-full rounded-xl" />
         <Skeleton className="h-20 w-full rounded-xl" />
         <Card>
@@ -179,16 +179,16 @@ export function SettingsView() {
   }
 
   return (
-    <div className="space-y-4 max-w-5xl mx-auto" dir="rtl">
+    <div className="space-y-4 max-w-5xl mx-auto" dir="ltr">
       {/* Page header */}
       <div className="flex items-center gap-3">
         <div className="w-11 h-11 rounded-xl bg-emerald-600 flex items-center justify-center shadow-sm shrink-0">
           <Store className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h1 className="text-xl lg:text-2xl font-bold">دکان کی سیٹنگز</h1>
+          <h1 className="text-xl lg:text-2xl font-bold">Shop Settings</h1>
           <p className="text-sm text-muted-foreground">
-            اپنے POS سسٹم کی مجموعی ترتیبات کو یہاں سے کنٹرول کریں
+            Control your overall POS system settings from here
           </p>
         </div>
       </div>
@@ -202,23 +202,23 @@ export function SettingsView() {
             </div>
             <div className="space-y-2 text-sm leading-6">
               <p className="font-semibold text-emerald-800 dark:text-emerald-300">
-                یہ سیٹنگز پورے POS سسٹم پر لاگو ہوتی ہیں
+                These settings apply across the POS (receipts, invoices, tax)
               </p>
               <p className="text-muted-foreground">
-                دکان کا نام، فون اور پتہ رسیدوں اور انوائس پر ظاہر ہوگا۔ ٹیکس
-                کی ترتیبات فروخت کے حساب کتاب میں شامل ہوگی۔ کرنسی کی علامت
-                تمام رقموں کے ساتھ دکھائی دیگی۔ انوائس پریفکس ہر نئی فروخت کے
-                نمبر کے آغاز میں استعمال ہوگا۔
+                Shop name, phone, and address appear on receipts and invoices.
+                Tax settings are included in sales calculations. The currency
+                symbol is shown alongside all amounts. The invoice prefix is
+                used at the start of every new sale number.
               </p>
               <div className="flex flex-wrap gap-2 pt-1">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
-                  <Receipt className="w-3.5 h-3.5" /> رسیدیں
+                  <Receipt className="w-3.5 h-3.5" /> Receipts
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
-                  <FileText className="w-3.5 h-3.5" /> انوائس
+                  <FileText className="w-3.5 h-3.5" /> Invoices
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
-                  <Percent className="w-3.5 h-3.5" /> ٹیکس
+                  <Percent className="w-3.5 h-3.5" /> Tax
                 </span>
               </div>
             </div>
@@ -235,14 +235,14 @@ export function SettingsView() {
             </div>
             <div className="flex-1 space-y-3">
               <p className="font-semibold text-amber-800 dark:text-amber-300 text-sm">
-                ڈیمو اکاؤنٹس (صرف معلومات کے لیے)
+                Demo Credentials (for information only)
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="rounded-lg bg-background/80 dark:bg-background/40 border border-amber-200/60 dark:border-amber-900/30 p-3">
                   <div className="flex items-center gap-2 mb-1.5">
                     <ShieldCheck className="w-4 h-4 text-emerald-600" />
                     <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                      ایڈمن
+                      Admin
                     </span>
                   </div>
                   <div className="text-xs font-mono space-y-0.5" dir="ltr">
@@ -254,7 +254,7 @@ export function SettingsView() {
                   <div className="flex items-center gap-2 mb-1.5">
                     <UserCircle2 className="w-4 h-4 text-emerald-600" />
                     <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                      کیشیئر
+                      Cashier
                     </span>
                   </div>
                   <div className="text-xs font-mono space-y-0.5" dir="ltr">
@@ -266,8 +266,8 @@ export function SettingsView() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                یہ اکاؤنٹس ترقیاتی مقاصد کے لیے دستیاب ہیں۔ پروڈکشن میں استعمال
-                سے قبل تبدیل کریں۔
+                These accounts are for development purposes. Change them before
+                using in production.
               </p>
             </div>
           </div>
@@ -279,10 +279,10 @@ export function SettingsView() {
         <CardHeader>
           <CardTitle className="text-lg flex items-center gap-2">
             <Store className="w-5 h-5 text-emerald-600" />
-            دکان کی تفصیل
+            Shop Details
           </CardTitle>
           <CardDescription>
-            مندرجہ ذیل خانوں کو بھریں اور &quot;محفوظ کریں&quot; دبائیں
+            Fill in the fields below and click &quot;Save&quot;
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -292,13 +292,13 @@ export function SettingsView() {
               <div className="space-y-2 lg:col-span-2">
                 <Label htmlFor="shopName" className="flex items-center gap-1.5">
                   <Store className="w-3.5 h-3.5 text-emerald-600" />
-                  دکان کا نام <span className="text-red-500">*</span>
+                  Shop Name <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="shopName"
                   value={form.shopName}
                   onChange={(e) => setField("shopName", e.target.value)}
-                  placeholder="مثلاً: نور جنرل سٹور"
+                  placeholder="e.g. Noor General Store"
                   required
                   className="h-11"
                 />
@@ -310,13 +310,13 @@ export function SettingsView() {
                   className="flex items-center gap-1.5"
                 >
                   <MapPin className="w-3.5 h-3.5 text-emerald-600" />
-                  پتہ
+                  Address
                 </Label>
                 <Textarea
                   id="shopAddress"
                   value={form.shopAddress}
                   onChange={(e) => setField("shopAddress", e.target.value)}
-                  placeholder="دکان کا مکمل پتہ"
+                  placeholder="Full shop address"
                   rows={2}
                   className="resize-none"
                 />
@@ -325,15 +325,15 @@ export function SettingsView() {
               <div className="space-y-2">
                 <Label htmlFor="shopPhone" className="flex items-center gap-1.5">
                   <Phone className="w-3.5 h-3.5 text-emerald-600" />
-                  فون نمبر
+                  Phone Number
                 </Label>
                 <Input
                   id="shopPhone"
                   value={form.shopPhone}
                   onChange={(e) => setField("shopPhone", e.target.value)}
-                  placeholder="مثلاً: 0300-1234567"
+                  placeholder="e.g. 0300-1234567"
                   dir="ltr"
-                  className="text-right h-11"
+                  className="h-11"
                 />
               </div>
 
@@ -343,7 +343,7 @@ export function SettingsView() {
                   className="flex items-center gap-1.5"
                 >
                   <Tag className="w-3.5 h-3.5 text-emerald-600" />
-                  کرنسی
+                  Currency
                 </Label>
                 <Input
                   id="currency"
@@ -351,10 +351,10 @@ export function SettingsView() {
                   onChange={(e) => setField("currency", e.target.value)}
                   placeholder="Rs"
                   dir="ltr"
-                  className="text-right h-11"
+                  className="h-11"
                 />
                 <p className="text-xs text-muted-foreground">
-                  یہ علامت تمام قیمتوں کے ساتھ دکھائی دیگی (مثلاً: Rs, $, ₹)
+                  This symbol is shown with all amounts (e.g. Rs, $, &euro;)
                 </p>
               </div>
             </div>
@@ -370,10 +370,10 @@ export function SettingsView() {
                     className="flex items-center gap-1.5 cursor-pointer"
                   >
                     <Percent className="w-3.5 h-3.5 text-emerald-600" />
-                    ٹیکس لاگو
+                    Enable Tax
                   </Label>
                   <p className="text-xs text-muted-foreground">
-                    فعال ہونے پر، فروخت پر ڈیفالٹ ٹیکس کا اطلاق ہوگا
+                    When enabled, default tax is applied to sales
                   </p>
                 </div>
                 <Switch
@@ -391,7 +391,7 @@ export function SettingsView() {
                       className="flex items-center gap-1.5"
                     >
                       <Percent className="w-3.5 h-3.5 text-emerald-600" />
-                      ڈیفالٹ ٹیکس %
+                      Default Tax %
                     </Label>
                     <Input
                       id="defaultTax"
@@ -405,10 +405,10 @@ export function SettingsView() {
                       }
                       placeholder="0"
                       dir="ltr"
-                      className="text-right h-11"
+                      className="h-11"
                     />
                     <p className="text-xs text-muted-foreground">
-                      0 سے 100 کے درمیان فیصد (مثلاً: 5 کا مطلب 5%)
+                      Percentage between 0 and 100 (e.g. 5 means 5%)
                     </p>
                   </div>
                 </div>
@@ -425,18 +425,18 @@ export function SettingsView() {
                   className="flex items-center gap-1.5"
                 >
                   <Receipt className="w-3.5 h-3.5 text-emerald-600" />
-                  رسید کا آخر متن
+                  Receipt Footer Text
                 </Label>
                 <Textarea
                   id="receiptFooter"
                   value={form.receiptFooter}
                   onChange={(e) => setField("receiptFooter", e.target.value)}
-                  placeholder="مثلاً: شکریہ! دوبارہ تشریف لائیں۔"
+                  placeholder="e.g. Thank you! Please come again."
                   rows={2}
                   className="resize-none"
                 />
                 <p className="text-xs text-muted-foreground">
-                  یہ متن ہر رسید کے آخر میں چھپے گا
+                  This text is printed at the bottom of every receipt
                 </p>
               </div>
 
@@ -446,7 +446,7 @@ export function SettingsView() {
                   className="flex items-center gap-1.5"
                 >
                   <FileText className="w-3.5 h-3.5 text-emerald-600" />
-                  انوائس پریفکس
+                  Invoice Prefix
                 </Label>
                 <Input
                   id="invoicePrefix"
@@ -454,11 +454,11 @@ export function SettingsView() {
                   onChange={(e) => setField("invoicePrefix", e.target.value)}
                   placeholder="INV"
                   dir="ltr"
-                  className="text-right h-11 uppercase"
+                  className="h-11 uppercase"
                 />
                 <p className="text-xs text-muted-foreground">
-                  ہر انوائس نمبر کے آغاز میں یہ پریفکس استعمال ہوگا (مثلاً:
-                  INV-0001)
+                  This prefix is used at the start of every invoice number
+                  (e.g. INV-0001)
                 </p>
               </div>
             </div>
@@ -470,12 +470,12 @@ export function SettingsView() {
                 variant="outline"
                 onClick={() => {
                   setForm(DEFAULT_FORM);
-                  toast.info(" فارم ری سیٹ ہو گیا");
+                  toast.info("Form reset");
                 }}
                 disabled={saving}
                 className="h-11"
               >
-                ری سیٹ
+                Reset
               </Button>
               <Button
                 type="submit"
@@ -485,12 +485,12 @@ export function SettingsView() {
                 {saving ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    محفوظ ہو رہا ہے…
+                    Saving...
                   </>
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    محفوظ کریں
+                    Save
                   </>
                 )}
               </Button>

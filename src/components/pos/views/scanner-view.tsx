@@ -51,26 +51,26 @@ export function ScannerView() {
         setLastFound(p);
         setLastStatus("found");
         cart.addItem(p, 1);
-        toast.success(`${p.name} کارٹ میں شامل ہو گیا`);
+        toast.success(`${p.name} added to cart`);
         setHistory((h) =>
           [
-            { code, name: p.name, found: true, time: new Date().toLocaleTimeString("ur-PK") },
+            { code, name: p.name, found: true, time: new Date().toLocaleTimeString("en-US") },
             ...h,
           ].slice(0, 20)
         );
       } else {
         setLastFound(null);
         setLastStatus("notfound");
-        toast.warning("یہ بارکوڈ موجود نہیں ہے");
+        toast.warning("This barcode is not in the system");
         setHistory((h) =>
           [
-            { code, name: "نہیں ملا", found: false, time: new Date().toLocaleTimeString("ur-PK") },
+            { code, name: "Not found", found: false, time: new Date().toLocaleTimeString("en-US") },
             ...h,
           ].slice(0, 20)
         );
       }
     } catch {
-      toast.error("تلاش ناکام");
+      toast.error("Lookup failed");
     }
   }
 
@@ -88,17 +88,17 @@ export function ScannerView() {
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <ScanBarcode className="w-6 h-6 text-emerald-600" />
-            بارکوڈ سکینر
+            Barcode Scanner
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            کیمرے سے بارکوڈ سکین کریں — پروڈکٹ خودکار کارٹ میں شامل ہو گا
+            Scan barcodes with your camera — products are added to cart automatically
           </p>
         </div>
         <Button
           className="bg-emerald-600 hover:bg-emerald-700"
           onClick={() => setView("pos")}
         >
-          <ShoppingCart className="w-4 h-4 ml-2" /> POS پر جائیں ({cart.items.length})
+          <ShoppingCart className="w-4 h-4 mr-2" /> Go to POS ({cart.items.length})
         </Button>
       </div>
 
@@ -106,23 +106,22 @@ export function ScannerView() {
         {/* Scanner */}
         <Card className="border-emerald-100">
           <CardContent className="p-4 space-y-4">
-            <h2 className="font-bold">کیمرا سکینر</h2>
+            <h2 className="font-bold">Camera Scanner</h2>
             <BarcodeScanner onScan={(code) => lookup(code)} debounceMs={2000} />
 
             <div className="pt-2 border-t">
               <form onSubmit={onManualSubmit} className="flex gap-2">
                 <div className="relative flex-1">
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
-                    placeholder="بارکوڈ دستی درج کریں..."
+                    placeholder="Enter barcode manually..."
                     value={manualCode}
                     onChange={(e) => setManualCode(e.target.value)}
-                    className="pr-10 text-left"
-                    dir="ltr"
+                    className="pl-10 text-left"
                   />
                 </div>
                 <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700">
-                  <Search className="w-4 h-4 ml-1" /> تلاش
+                  <Search className="w-4 h-4 mr-1" /> Find
                 </Button>
               </form>
             </div>
@@ -133,19 +132,19 @@ export function ScannerView() {
         <div className="space-y-4">
           <Card>
             <CardContent className="p-4 space-y-3">
-              <h2 className="font-bold">آخری نتیجہ</h2>
+              <h2 className="font-bold">Last Result</h2>
               {lastStatus === null && (
                 <div className="py-6 text-center text-muted-foreground text-sm">
-                  ابھی کوئی سکین نہیں ہوا
+                  No scan yet
                 </div>
               )}
               {lastStatus === "notfound" && (
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 border border-red-200">
                   <XCircle className="w-8 h-8 text-red-500 shrink-0" />
                   <div>
-                    <div className="font-medium text-red-700">پروڈکٹ نہیں ملا</div>
+                    <div className="font-medium text-red-700">Product not found</div>
                     <div className="text-xs text-red-600">
-                      یہ بارکوڈ سسٹم میں موجود نہیں ہے۔ نئی پروڈکٹ شامل کریں۔
+                      This barcode is not in the system. Add a new product.
                     </div>
                   </div>
                 </div>
@@ -156,11 +155,11 @@ export function ScannerView() {
                   <div className="flex-1 min-w-0">
                     <div className="font-bold">{lastFound.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {formatMoney(lastFound.salePrice, currency)} • سٹاک:{" "}
+                      {formatMoney(lastFound.salePrice, currency)} • Stock:{" "}
                       {lastFound.stock} {unitLabel(lastFound.unit)}
                     </div>
                   </div>
-                  <Badge className="bg-emerald-600">کارٹ میں</Badge>
+                  <Badge className="bg-emerald-600">In Cart</Badge>
                 </div>
               )}
               {lastStatus === "notfound" && (
@@ -169,7 +168,7 @@ export function ScannerView() {
                   className="w-full border-emerald-200 text-emerald-700 hover:bg-emerald-50"
                   onClick={() => setView("products")}
                 >
-                  <Plus className="w-4 h-4 ml-2" /> نئی پروڈکٹ شامل کریں
+                  <Plus className="w-4 h-4 mr-2" /> Add New Product
                 </Button>
               )}
             </CardContent>
@@ -181,7 +180,7 @@ export function ScannerView() {
                 <div className="flex items-center justify-between">
                   <h2 className="font-bold flex items-center gap-2">
                     <ShoppingCart className="w-5 h-5 text-emerald-600" />
-                    کارٹ
+                    Cart
                     <Badge className="bg-emerald-600">{cart.items.length}</Badge>
                   </h2>
                   <Button
@@ -189,7 +188,7 @@ export function ScannerView() {
                     className="bg-emerald-600 hover:bg-emerald-700"
                     onClick={() => setView("pos")}
                   >
-                    چیک آؤٹ
+                    Checkout
                   </Button>
                 </div>
                 <div className="space-y-1 max-h-60 overflow-y-auto">
@@ -202,7 +201,7 @@ export function ScannerView() {
                       <span className="text-muted-foreground px-2">
                         x{it.quantity}
                       </span>
-                      <span className="font-medium text-emerald-700" dir="ltr">
+                      <span className="font-medium text-emerald-700">
                         {formatMoney(
                           it.product.salePrice * it.quantity,
                           currency
@@ -212,8 +211,8 @@ export function ScannerView() {
                   ))}
                 </div>
                 <div className="flex justify-between font-bold pt-2 border-t">
-                  <span>کل</span>
-                  <span className="text-emerald-700" dir="ltr">
+                  <span>Total</span>
+                  <span className="text-emerald-700">
                     {formatMoney(cart.totals(!!settings?.taxEnabled).total, currency)}
                   </span>
                 </div>
@@ -229,7 +228,7 @@ export function ScannerView() {
           <CardContent className="p-4">
             <h2 className="font-bold mb-3 flex items-center gap-2">
               <Package className="w-5 h-5 text-emerald-600" />
-              سکین کی تاریخ
+              Scan History
             </h2>
             <div className="space-y-1 max-h-64 overflow-y-auto">
               {history.map((h, i) => (
@@ -237,16 +236,16 @@ export function ScannerView() {
                   key={i}
                   className="flex items-center justify-between text-sm py-1.5 border-b last:border-0"
                 >
-                  <span dir="ltr" className="font-mono text-xs text-muted-foreground">
+                  <span className="font-mono text-xs text-muted-foreground">
                     {h.code}
                   </span>
                   <span className="flex-1 px-3 truncate">{h.name}</span>
                   {h.found ? (
                     <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-                      مل گیا
+                      Found
                     </Badge>
                   ) : (
-                    <Badge variant="destructive">نہیں ملا</Badge>
+                    <Badge variant="destructive">Not Found</Badge>
                   )}
                   <span className="text-xs text-muted-foreground px-2">{h.time}</span>
                 </div>
