@@ -19,29 +19,23 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
   const body = await req.json();
+  const data: any = {
+    shopName: body.shopName,
+    subName: body.subName ?? null,
+    logo: body.logo ?? null,
+    shopAddress: body.shopAddress,
+    shopPhone: body.shopPhone,
+    currency: body.currency,
+    taxEnabled: body.taxEnabled === true,
+    defaultTax: Number(body.defaultTax) || 0,
+    receiptFooter: body.receiptFooter,
+    invoicePrefix: body.invoicePrefix,
+    printerWidth: Number(body.printerWidth) === 80 ? 80 : 58,
+  };
   const settings = await db.settings.upsert({
     where: { id: "shop" },
-    update: {
-      shopName: body.shopName,
-      shopAddress: body.shopAddress,
-      shopPhone: body.shopPhone,
-      currency: body.currency,
-      taxEnabled: body.taxEnabled === true,
-      defaultTax: Number(body.defaultTax) || 0,
-      receiptFooter: body.receiptFooter,
-      invoicePrefix: body.invoicePrefix,
-    },
-    create: {
-      id: "shop",
-      shopName: body.shopName,
-      shopAddress: body.shopAddress,
-      shopPhone: body.shopPhone,
-      currency: body.currency,
-      taxEnabled: body.taxEnabled === true,
-      defaultTax: Number(body.defaultTax) || 0,
-      receiptFooter: body.receiptFooter,
-      invoicePrefix: body.invoicePrefix,
-    },
+    update: data,
+    create: { id: "shop", ...data },
   });
   return NextResponse.json({ settings });
 }

@@ -10,6 +10,7 @@ export type View =
   | "sales"
   | "reports"
   | "users"
+  | "cards"
   | "settings";
 
 interface AppState {

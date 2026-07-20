@@ -14,7 +14,11 @@ import {
   Trophy,
   BarChart3,
   Boxes,
+  Calendar as CalendarIcon,
+  CalendarDays,
+  X,
 } from "lucide-react";
+import { format } from "date-fns";
 import {
   BarChart,
   Bar,
@@ -40,6 +44,13 @@ import {
 } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar as CalendarPicker } from "@/components/ui/calendar";
 import {
   Table,
   TableBody,
@@ -52,7 +63,7 @@ import { toast } from "sonner";
 import { formatMoney } from "@/lib/pos-utils";
 import type { Product } from "@/types";
 
-type RangeKey = "today" | "week" | "month" | "all";
+type RangeKey = "today" | "week" | "month" | "all" | "custom";
 
 interface TopProduct {
   name: string;
@@ -89,6 +100,7 @@ const RANGE_TABS: { key: RangeKey; label: string }[] = [
   { key: "week", label: "Week" },
   { key: "month", label: "Month" },
   { key: "all", label: "All" },
+  { key: "custom", label: "Custom" },
 ];
 
 const RANGE_LABELS: Record<RangeKey, string> = {
@@ -96,6 +108,7 @@ const RANGE_LABELS: Record<RangeKey, string> = {
   week: "Last week's report",
   month: "Last month's report",
   all: "All-time report",
+  custom: "Custom range report",
 };
 
 // Emerald palette for chart bars
@@ -117,6 +130,11 @@ export function ReportsView() {
   const [loading, setLoading] = React.useState(true);
   const [settingsLoading, setSettingsLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
+  // Custom date range state
+  const [customFrom, setCustomFrom] = React.useState<Date | undefined>(undefined);
+  const [customTo, setCustomTo] = React.useState<Date | undefined>(undefined);
+  const [appliedFrom, setAppliedFrom] = React.useState<Date | undefined>(undefined);
+  const [appliedTo, setAppliedTo] = React.useState<Date | undefined>(undefined);
 
   const currency = settings?.currency || "Rs";
 
@@ -136,11 +154,25 @@ export function ReportsView() {
   }, []);
 
   const fetchReports = React.useCallback(
-    async (r: RangeKey, isRefresh = false) => {
+    async (
+      r: RangeKey,
+      opts?: { from?: Date; to?: Date; isRefresh?: boolean }
+    ) => {
+      const from = opts?.from;
+      const to = opts?.to;
+      const isRefresh = opts?.isRefresh ?? false;
       try {
         if (isRefresh) setRefreshing(true);
         else setLoading(true);
-        const res = await fetch(`/api/reports?range=${r}`, { cache: "no-store" });
+        let url = `/api/reports?range=${r}`;
+        if (r === "custom") {
+          if (!from || !to) {
+            setData(null);
+            return;
+          }
+          url += `&from=${format(from, "yyyy-MM-dd")}&to=${format(to, "yyyy-MM-dd")}`;
+        }
+        const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error("reports");
         const json = (await res.json()) as ReportData;
         setData(json);
@@ -159,16 +191,46 @@ export function ReportsView() {
   }, [fetchSettings]);
 
   React.useEffect(() => {
-    fetchReports(range);
-  }, [range, fetchReports]);
+    fetchReports(range, {
+      from: appliedFrom,
+      to: appliedTo,
+    });
+  }, [range, appliedFrom, appliedTo, fetchReports]);
 
   function handleRefresh() {
-    fetchReports(range, true);
+    fetchReports(range, {
+      from: appliedFrom,
+      to: appliedTo,
+      isRefresh: true,
+    });
     toast.success("Reports refreshed");
   }
 
   function handleRangeChange(value: string) {
     setRange(value as RangeKey);
+  }
+
+  function handleApplyCustom() {
+    if (!customFrom || !customTo) {
+      toast.error("Please select both start and end dates");
+      return;
+    }
+    if (customFrom > customTo) {
+      toast.error("Start date must be before end date");
+      return;
+    }
+    setAppliedFrom(customFrom);
+    setAppliedTo(customTo);
+    toast.success(
+      `Custom range applied: ${format(customFrom, "MMM d, yyyy")} — ${format(customTo, "MMM d, yyyy")}`
+    );
+  }
+
+  function handleClearCustom() {
+    setCustomFrom(undefined);
+    setCustomTo(undefined);
+    setAppliedFrom(undefined);
+    setAppliedTo(undefined);
   }
 
   const isLoading = loading || settingsLoading;
@@ -183,10 +245,16 @@ export function ReportsView() {
             Reports &amp; Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {data ? RANGE_LABELS[range] : "Loading..."}
+            {isLoading
+              ? "Loading..."
+              : range === "custom" && appliedFrom && appliedTo
+              ? `${format(appliedFrom, "MMM d, yyyy")} — ${format(appliedTo, "MMM d, yyyy")}`
+              : range === "custom"
+              ? "Pick a custom date range and apply"
+              : RANGE_LABELS[range]}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Tabs value={range} onValueChange={handleRangeChange}>
             <TabsList>
               {RANGE_TABS.map((t) => (
@@ -210,6 +278,52 @@ export function ReportsView() {
           </Button>
         </div>
       </div>
+
+      {/* Custom date range picker */}
+      {range === "custom" && (
+        <div className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-3">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">From date</Label>
+            <DateField
+              placeholder="Start date"
+              value={customFrom}
+              onSelect={setCustomFrom}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs text-muted-foreground">To date</Label>
+            <DateField
+              placeholder="End date"
+              value={customTo}
+              onSelect={setCustomTo}
+            />
+          </div>
+          <Button
+            className="bg-emerald-600 hover:bg-emerald-700"
+            onClick={handleApplyCustom}
+          >
+            <CalendarDays className="w-4 h-4 mr-2" />
+            Apply
+          </Button>
+          {(customFrom || customTo || appliedFrom || appliedTo) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearCustom}
+              className="text-muted-foreground"
+            >
+              <X className="w-4 h-4 mr-1" />
+              Clear
+            </Button>
+          )}
+          {appliedFrom && appliedTo && (
+            <span className="text-xs text-muted-foreground ml-auto">
+              Showing: {format(appliedFrom, "MMM d, yyyy")} —{" "}
+              {format(appliedTo, "MMM d, yyyy")}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -718,6 +832,46 @@ function EmptyState({
       <p className="font-medium text-sm">{title}</p>
       <p className="text-xs text-muted-foreground mt-1">{desc}</p>
     </div>
+  );
+}
+
+function DateField({
+  placeholder,
+  value,
+  onSelect,
+}: {
+  placeholder: string;
+  value: Date | undefined;
+  onSelect: (d: Date | undefined) => void;
+}) {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className="justify-start text-left font-normal h-9 min-w-[150px]"
+        >
+          <CalendarIcon className="w-4 h-4 mr-2 text-emerald-600" />
+          {value ? (
+            format(value, "MMM d, yyyy")
+          ) : (
+            <span className="text-muted-foreground">{placeholder}</span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <CalendarPicker
+          mode="single"
+          selected={value}
+          onSelect={(d) => {
+            onSelect(d || undefined);
+            if (d) setOpen(false);
+          }}
+          initialFocus
+        />
+      </PopoverContent>
+    </Popover>
   );
 }
 

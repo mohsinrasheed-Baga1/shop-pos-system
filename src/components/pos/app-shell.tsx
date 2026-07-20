@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import {
   ShoppingCart,
   Package,
-  ScanBarcode,
   Receipt,
   BarChart3,
   Users,
@@ -17,6 +16,7 @@ import {
   X,
   Moon,
   Sun,
+  CreditCard,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ import { SalesView } from "@/components/pos/views/sales-view";
 import { ReportsView } from "@/components/pos/views/reports-view";
 import { UsersView } from "@/components/pos/views/users-view";
 import { SettingsView } from "@/components/pos/views/settings-view";
+import { CardsView } from "@/components/pos/views/cards-view";
 import { toast } from "sonner";
 
 interface AppShellProps {
@@ -38,8 +39,8 @@ interface AppShellProps {
 
 const NAV: { id: View; label: string; icon: any; minRole?: string }[] = [
   { id: "pos", label: "Sell (POS)", icon: ShoppingCart },
-  { id: "scanner", label: "Barcode Scanner", icon: ScanBarcode },
   { id: "products", label: "Products", icon: Package },
+  { id: "cards", label: "Shop Cards", icon: CreditCard },
   { id: "sales", label: "Sales History", icon: Receipt },
   { id: "reports", label: "Reports", icon: BarChart3 },
   { id: "users", label: "User Management", icon: Users, minRole: "ADMIN" },
@@ -72,6 +73,8 @@ export function AppShell({ user, settings }: AppShellProps) {
         return <ScannerView />;
       case "products":
         return <ProductsView userRole={user.role} />;
+      case "cards":
+        return <CardsView userRole={user.role} />;
       case "sales":
         return <SalesView />;
       case "reports":

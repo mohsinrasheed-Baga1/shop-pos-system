@@ -9,11 +9,23 @@ import {
   TrendingUp,
   Wallet,
   RefreshCw,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -36,6 +48,9 @@ export function SalesView() {
   const [todayOnly, setTodayOnly] = React.useState(true);
   const [selected, setSelected] = React.useState<Sale | null>(null);
   const [receiptOpen, setReceiptOpen] = React.useState(false);
+  const [returnTarget, setReturnTarget] = React.useState<Sale | null>(null);
+  const [returnReason, setReturnReason] = React.useState("");
+  const [returnSubmitting, setReturnSubmitting] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -84,6 +99,39 @@ export function SalesView() {
   function viewReceipt(sale: Sale) {
     setSelected(sale);
     setReceiptOpen(true);
+  }
+
+  function openReturnDialog(sale: Sale) {
+    setReturnTarget(sale);
+    setReturnReason("");
+  }
+
+  function closeReturnDialog() {
+    setReturnTarget(null);
+    setReturnReason("");
+  }
+
+  async function handleConfirmReturn() {
+    if (!returnTarget) return;
+    setReturnSubmitting(true);
+    try {
+      const res = await fetch(`/api/sales/${returnTarget.id}/return`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: returnReason.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to return sale");
+      }
+      toast.success("Sale returned successfully");
+      closeReturnDialog();
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to return sale");
+    } finally {
+      setReturnSubmitting(false);
+    }
   }
 
   return (
@@ -200,6 +248,7 @@ export function SalesView() {
                     <TableHead className="text-right">Items</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Payment</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -232,15 +281,41 @@ export function SalesView() {
                             : "Mobile"}
                         </Badge>
                       </TableCell>
+                      <TableCell>
+                        {s.status === "RETURNED" ? (
+                          <Badge className="bg-red-100 text-red-700 border-red-200 hover:bg-red-100">
+                            Returned
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-100">
+                            Completed
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-8 w-8"
-                          onClick={() => viewReceipt(s)}
-                        >
-                          <Eye className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => viewReceipt(s)}
+                            aria-label="View receipt"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                          {s.status === "COMPLETED" && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                              onClick={() => openReturnDialog(s)}
+                              aria-label="Return sale"
+                              title="Return / Refund"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -257,6 +332,66 @@ export function SalesView() {
         open={receiptOpen}
         onOpenChange={setReceiptOpen}
       />
+
+      {/* Return / Refund confirmation */}
+      <AlertDialog
+        open={!!returnTarget}
+        onOpenChange={(o) => {
+          if (!o) closeReturnDialog();
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RotateCcw className="w-5 h-5 text-amber-600" />
+              Return this sale?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Items will be restocked and the amount refunded. This cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {returnTarget && (
+            <div className="rounded-md bg-muted/50 p-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Invoice</span>
+                <span className="font-mono">{returnTarget.invoiceNo}</span>
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="text-muted-foreground">Refund amount</span>
+                <span className="font-bold text-emerald-700">
+                  {formatMoney(returnTarget.total, currency)}
+                </span>
+              </div>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="return-reason">Reason (optional)</Label>
+            <Input
+              id="return-reason"
+              placeholder="e.g. Customer changed mind, defective item..."
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+              disabled={returnSubmitting}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={returnSubmitting}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmReturn();
+              }}
+              disabled={returnSubmitting}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              {returnSubmitting ? "Processing..." : "Confirm Return"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

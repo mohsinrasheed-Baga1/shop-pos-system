@@ -68,10 +68,23 @@ model Sale {
   paidAmount   Float      @default(0)
   change       Float      @default(0)
   paymentMethod String    @default("CASH") // CASH | CARD | MOBILE
-  status       String     @default("COMPLETED") // COMPLETED | REFUNDED
+  status       String     @default("COMPLETED") // COMPLETED | RETURNED
+  originalSaleId String?  // if this is a return record, links to original sale
   note         String?
   createdAt    DateTime   @default(now())
   items        SaleItem[]
+  returns      SaleReturn[]
+}
+
+model SaleReturn {
+  id           String   @id @default(cuid())
+  saleId       String
+  sale         Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  userId       String
+  amount       Float
+  reason       String?
+  restocked    Boolean  @default(true)
+  createdAt    DateTime @default(now())
 }
 
 model SaleItem {
@@ -109,9 +122,38 @@ model Customer {
   updatedAt DateTime @updatedAt
 }
 
+model CustomerCard {
+  id             String            @id @default(cuid())
+  cardNumber     String            @unique
+  name           String
+  phone          String?
+  address        String?
+  type           String            @default("REGULAR") // REGULAR | WHOLESALE
+  balance        Float             @default(0)
+  totalPurchases Float             @default(0)
+  totalPaid      Float             @default(0)
+  active         Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  transactions   CardTransaction[]
+}
+
+model CardTransaction {
+  id          String        @id @default(cuid())
+  cardId      String
+  card        CustomerCard  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  type        String // PURCHASE | PAYMENT | DEPOSIT | WITHDRAW
+  amount      Float         @default(0)
+  description String?
+  saleId      String?
+  createdAt   DateTime      @default(now())
+}
+
 model Settings {
   id            String   @id @default("shop")
   shopName      String   @default("My Shop")
+  subName       String?
+  logo          String?
   shopAddress   String?
   shopPhone     String?
   currency      String   @default("Rs")
@@ -119,6 +161,8 @@ model Settings {
   defaultTax    Float    @default(0)
   receiptFooter String?
   invoicePrefix String   @default("INV")
+  printerWidth  Int      @default(58)
+  backupPasswordHash String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

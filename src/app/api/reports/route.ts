@@ -7,17 +7,30 @@ export async function GET(req: NextRequest) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { searchParams } = new URL(req.url);
-  const range = searchParams.get("range") || "today"; // today | week | month | all
+  const range = searchParams.get("range") || "today"; // today | week | month | all | custom
+  const fromParam = searchParams.get("from"); // ISO date string (custom range start)
+  const toParam = searchParams.get("to"); // ISO date string (custom range end)
 
   const now = new Date();
   let start = new Date(now);
-  if (range === "today") start.setHours(0, 0, 0, 0);
-  else if (range === "week") start.setDate(now.getDate() - 7);
-  else if (range === "month") start.setMonth(now.getMonth() - 1);
-  else start = new Date(0);
+  let end = new Date(now);
+  if (range === "custom" && fromParam && toParam) {
+    start = new Date(fromParam);
+    start.setHours(0, 0, 0, 0);
+    end = new Date(toParam);
+    end.setHours(23, 59, 59, 999);
+  } else if (range === "today") {
+    start.setHours(0, 0, 0, 0);
+  } else if (range === "week") {
+    start.setDate(now.getDate() - 7);
+  } else if (range === "month") {
+    start.setMonth(now.getMonth() - 1);
+  } else {
+    start = new Date(0);
+  }
 
   const sales = await db.sale.findMany({
-    where: { createdAt: { gte: start, lte: now }, status: "COMPLETED" },
+    where: { createdAt: { gte: start, lte: end }, status: "COMPLETED" },
     include: { items: true },
   });
 

@@ -26,12 +26,17 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
 
   const currency = settings?.currency || "Rs";
   const taxEnabled = !!settings?.taxEnabled;
+  const subName = settings?.subName?.trim() || "";
+  const logo = settings?.logo || "";
 
   function handlePrint() {
     const content = printRef.current;
     if (!content) return;
     const win = window.open("", "_blank", "width=380,height=600");
-    if (!win) return;
+    if (!win) {
+      // sonner is not imported here to keep the bundle small; alert as fallback
+      return;
+    }
     win.document.write(`
       <html dir="ltr"><head><title>Receipt ${sale.invoiceNo}</title>
       <style>
@@ -45,6 +50,8 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
         th { border-bottom: 1px solid #000; }
         .bold { font-weight: bold; }
         .big { font-size: 14px; font-weight: bold; }
+        .sub-name { font-size: 13px; font-weight: bold; margin-top: 2px; }
+        .logo { max-height: 60px; height: 60px; max-width: 100%; margin: 0 auto 4px auto; display: block; }
       </style></head><body>${content.innerHTML}</body></html>
     `);
     win.document.close();
@@ -52,7 +59,7 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
     setTimeout(() => {
       win.print();
       win.close();
-    }, 300);
+    }, 350);
   }
 
   return (
@@ -69,12 +76,39 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
           className="bg-white text-black p-4 rounded-lg space-y-2 text-sm"
         >
           <div className="center">
+            {logo && (
+              <img
+                src={logo}
+                alt="Shop logo"
+                className="logo"
+                style={{
+                  maxHeight: "60px",
+                  height: "60px",
+                  maxWidth: "100%",
+                  margin: "0 auto 4px auto",
+                  display: "block",
+                  objectFit: "contain",
+                }}
+              />
+            )}
             <div className="big">{settings?.shopName || "POS"}</div>
             {settings?.shopAddress && (
               <div className="text-xs">{settings.shopAddress}</div>
             )}
             {settings?.shopPhone && (
               <div className="text-xs">Phone: {settings.shopPhone}</div>
+            )}
+            {subName && (
+              <div
+                className="sub-name"
+                style={{
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  marginTop: "2px",
+                }}
+              >
+                {subName}
+              </div>
             )}
           </div>
           <div className="border" />

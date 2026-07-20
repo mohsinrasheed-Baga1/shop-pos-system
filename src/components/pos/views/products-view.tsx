@@ -601,41 +601,118 @@ function BarcodePrintDialog({
   onClose: () => void;
 }) {
   const [count, setCount] = React.useState(1);
+  const [shopName, setShopName] = React.useState<string>("");
   const labelRef = React.useRef<HTMLDivElement>(null);
+
+  // Fetch shop name from settings (used at the top of the sticker)
+  React.useEffect(() => {
+    if (!product) return;
+    let active = true;
+    fetch("/api/settings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!active) return;
+        const s = d?.settings;
+        setShopName(s?.shopName?.trim() || "My Shop");
+      })
+      .catch(() => {
+        if (active) setShopName("My Shop");
+      });
+    return () => {
+      active = false;
+    };
+  }, [product]);
 
   if (!product) return null;
 
   function handlePrint() {
     const content = labelRef.current;
     if (!content) return;
-    const win = window.open("", "_blank", "width=400,height=600");
-    if (!win) return;
+    const win = window.open("", "_blank", "width=400,height=400");
+    if (!win) {
+      toast.error("Pop-up blocked. Please allow pop-ups to print.");
+      return;
+    }
     win.document.write(`
-      <html><head><title>Barcode ${product!.name}</title>
+      <html dir="ltr"><head><title>Sticker ${product!.name}</title>
       <style>
-        @page { margin: 4mm; }
-        body { margin: 0; padding: 4px; font-family: Tahoma, sans-serif; }
-        .label { display: inline-block; width: 48%; border: 1px dashed #999; padding: 6px; text-align: center; box-sizing: border-box; margin: 2px; page-break-inside: avoid; }
-        .name { font-size: 12px; font-weight: bold; margin-bottom: 2px; }
-        .price { font-size: 14px; font-weight: bold; }
+        @page { size: 50mm 25mm; margin: 0; }
+        html, body { margin: 0; padding: 0; }
+        body { width: 50mm; }
+        * { box-sizing: border-box; }
+        .sticker {
+          width: 50mm;
+          height: 25mm;
+          border: 1px dashed #999;
+          padding: 1mm 1.5mm;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: space-between;
+          font-family: Tahoma, Arial, sans-serif;
+          color: #000;
+          background: #fff;
+          text-align: center;
+          overflow: hidden;
+          page-break-inside: avoid;
+        }
+        .shop-name {
+          font-size: 7px;
+          font-weight: bold;
+          line-height: 1.05;
+          width: 100%;
+        }
+        .barcode {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          overflow: hidden;
+        }
+        .product-name {
+          font-size: 7px;
+          font-weight: 600;
+          line-height: 1.05;
+          width: 100%;
+        }
       </style></head><body>${content.innerHTML}</body></html>
     `);
     win.document.close();
     win.focus();
     setTimeout(() => {
       win.print();
-      win.close();
-    }, 300);
+      setTimeout(() => win.close(), 250);
+    }, 350);
   }
+
+  // Inline sticker style — matches the printed layout exactly (50mm × 25mm).
+  const stickerStyle: React.CSSProperties = {
+    width: "50mm",
+    height: "25mm",
+    border: "1px dashed #d1d5db",
+    padding: "1mm 1.5mm",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "space-between",
+    color: "#000",
+    background: "#fff",
+    textAlign: "center",
+    overflow: "hidden",
+  };
 
   return (
     <Dialog open={!!product} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Print Barcode Label</DialogTitle>
+          <DialogTitle>Print Barcode Sticker</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="text-center font-medium">{product.name}</div>
+          <div className="text-center text-xs text-muted-foreground">
+            Sticker size: 50mm × 25mm. Shop name (top) — Barcode (middle) —
+            Product name (bottom).
+          </div>
           <div className="flex items-center gap-2">
             <Label className="whitespace-nowrap">Quantity</Label>
             <Input
@@ -643,25 +720,66 @@ function BarcodePrintDialog({
               min={1}
               max={100}
               value={count}
-              onChange={(e) => setCount(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
+              onChange={(e) =>
+                setCount(
+                  Math.min(100, Math.max(1, Number(e.target.value) || 1))
+                )
+              }
               className="text-left w-24"
             />
           </div>
           <div
             ref={labelRef}
-            className="bg-white border rounded p-2 grid grid-cols-2 gap-1"
+            className="bg-white border rounded p-2 flex flex-wrap gap-1 justify-center"
           >
             {Array.from({ length: count }).map((_, i) => (
-              <div key={i} className="label border border-dashed border-gray-300 p-1 text-center">
-                <div className="text-xs font-bold truncate">{product.name}</div>
-                <BarcodeDisplay
-                  value={product.barcode}
-                  format={product.barcodeType === "EAN13" ? "EAN13" : "CODE128"}
-                  height={40}
-                  width={1.4}
-                />
-                <div className="text-sm font-bold text-emerald-700">
-                  {formatMoney(product.salePrice)}
+              <div key={i} className="sticker" style={stickerStyle}>
+                {/* TOP — shop name */}
+                <div
+                  className="shop-name"
+                  style={{
+                    fontSize: "7px",
+                    fontWeight: "bold",
+                    lineHeight: 1.05,
+                    width: "100%",
+                  }}
+                >
+                  {shopName || "My Shop"}
+                </div>
+                {/* MIDDLE — barcode */}
+                <div
+                  className="barcode"
+                  style={{
+                    flex: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "100%",
+                    overflow: "hidden",
+                  }}
+                >
+                  <BarcodeDisplay
+                    value={product.barcode}
+                    format={product.barcodeType === "EAN13" ? "EAN13" : "CODE128"}
+                    height={28}
+                    width={1}
+                    displayValue={false}
+                  />
+                </div>
+                {/* BOTTOM — product name */}
+                <div
+                  className="product-name"
+                  style={{
+                    fontSize: "7px",
+                    fontWeight: 600,
+                    lineHeight: 1.05,
+                    width: "100%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {product.name}
                 </div>
               </div>
             ))}
@@ -671,7 +789,10 @@ function BarcodePrintDialog({
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
-          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handlePrint}>
+          <Button
+            className="bg-emerald-600 hover:bg-emerald-700"
+            onClick={handlePrint}
+          >
             <Printer className="w-4 h-4 mr-2" /> Print
           </Button>
         </DialogFooter>
