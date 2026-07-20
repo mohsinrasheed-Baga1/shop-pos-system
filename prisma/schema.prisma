@@ -16,7 +16,7 @@ model User {
   name         String
   password     String
   phone        String?
-  role         String   @default("CASHIER") // ADMIN | MANAGER | CASHIER
+  role         String   @default("CASHIER")
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -32,48 +32,71 @@ model Category {
   products  Product[]
 }
 
+model Vendor {
+  id          String   @id @default(cuid())
+  name        String
+  companyName String?
+  phone       String?
+  address     String?
+  note        String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  products    Product[]
+}
+
 model Product {
-  id           String   @id @default(cuid())
-  name         String
-  barcode      String   @unique
-  barcodeType  String   @default("CODE128") // CODE128 | EAN13 | COMPANY (scanned)
-  categoryId   String?
-  category     Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  costPrice    Float    @default(0)   // purchase price
-  salePrice    Float    @default(0)   // selling price
-  unit         String   @default("piece") // piece | kg | gram | litre | ml | dozen
-  stock        Float    @default(0)
-  minStock     Float    @default(0)   // low-stock alert threshold
-  taxRate      Float    @default(0)   // percent
-  hasBarcode   Boolean  @default(true) // false for loose items (auto-generated)
-  image        String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  saleItems    SaleItem[]
-  stockLogs    StockLog[]
+  id              String   @id @default(cuid())
+  name            String
+  barcode         String   @unique
+  barcodeType     String   @default("CODE128")
+  categoryId      String?
+  category        Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  vendorId        String?
+  vendor          Vendor?  @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  costPrice       Float    @default(0)
+  salePrice       Float    @default(0)
+  wholesalePrice  Float    @default(0)
+  unit            String   @default("piece")
+  stock           Float    @default(0)
+  storeStock      Float    @default(0)
+  minStock        Float    @default(0)
+  taxRate         Float    @default(0)
+  expiryDate      DateTime?
+  manufacturingDate DateTime?
+  hasBarcode      Boolean  @default(true)
+  image           String?
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  saleItems       SaleItem[]
+  stockLogs       StockLog[]
+  storeTxns       StoreTransaction[]
 }
 
 model Sale {
-  id           String     @id @default(cuid())
-  invoiceNo    String     @unique
-  userId       String
-  user         User       @relation(fields: [userId], references: [id])
-  customerName String?
+  id            String     @id @default(cuid())
+  invoiceNo     String     @unique
+  userId        String
+  user          User       @relation(fields: [userId], references: [id])
+  cardId        String?
+  card          CustomerCard? @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  customerName  String?
   customerPhone String?
-  subtotal     Float      @default(0)
-  taxTotal     Float      @default(0)
-  discount     Float      @default(0)
-  total        Float      @default(0)
-  paidAmount   Float      @default(0)
-  change       Float      @default(0)
-  paymentMethod String    @default("CASH") // CASH | CARD | MOBILE
-  status       String     @default("COMPLETED") // COMPLETED | RETURNED
-  originalSaleId String?  // if this is a return record, links to original sale
-  note         String?
-  createdAt    DateTime   @default(now())
-  items        SaleItem[]
-  returns      SaleReturn[]
+  subtotal      Float      @default(0)
+  taxTotal      Float      @default(0)
+  discount      Float      @default(0)
+  total         Float      @default(0)
+  paidAmount    Float      @default(0)
+  change        Float      @default(0)
+  paymentMethod String     @default("CASH")
+  saleType      String     @default("RETAIL")
+  status        String     @default("COMPLETED")
+  originalSaleId String?
+  note          String?
+  createdAt     DateTime   @default(now())
+  items         SaleItem[]
+  returns       SaleReturn[]
 }
 
 model SaleReturn {
@@ -107,46 +130,48 @@ model StockLog {
   id        String   @id @default(cuid())
   productId String
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  type      String   // PURCHASE | SALE | ADJUSTMENT | RETURN
+  type      String
   quantity  Float
   note      String?
   createdAt DateTime @default(now())
 }
 
-model Customer {
-  id        String   @id @default(cuid())
-  name      String
-  phone     String?
-  address   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 model CustomerCard {
-  id             String            @id @default(cuid())
-  cardNumber     String            @unique
+  id             String   @id @default(cuid())
+  cardNumber     String   @unique
   name           String
   phone          String?
   address        String?
-  type           String            @default("REGULAR") // REGULAR | WHOLESALE
-  balance        Float             @default(0)
-  totalPurchases Float             @default(0)
-  totalPaid      Float             @default(0)
-  active         Boolean           @default(true)
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
+  type           String   @default("REGULAR")
+  balance        Float    @default(0)
+  totalPurchases Float    @default(0)
+  totalPaid      Float    @default(0)
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
   transactions   CardTransaction[]
+  sales          Sale[]
 }
 
 model CardTransaction {
-  id          String        @id @default(cuid())
+  id          String   @id @default(cuid())
   cardId      String
-  card        CustomerCard  @relation(fields: [cardId], references: [id], onDelete: Cascade)
-  type        String // PURCHASE | PAYMENT | DEPOSIT | WITHDRAW
-  amount      Float         @default(0)
+  card        CustomerCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  type        String
+  amount      Float
   description String?
   saleId      String?
-  createdAt   DateTime      @default(now())
+  createdAt   DateTime @default(now())
+}
+
+model StoreTransaction {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type        String
+  quantity    Float
+  note        String?
+  createdAt   DateTime @default(now())
 }
 
 model Settings {

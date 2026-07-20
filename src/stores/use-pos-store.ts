@@ -4,6 +4,7 @@ import { create } from "zustand";
 import type { Product, CartItem } from "@/types";
 
 export type View =
+  | "dashboard"
   | "pos"
   | "products"
   | "scanner"
@@ -11,6 +12,8 @@ export type View =
   | "reports"
   | "users"
   | "cards"
+  | "store"
+  | "vendors"
   | "settings";
 
 interface AppState {
@@ -21,7 +24,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  view: "pos",
+  view: "dashboard",
   setView: (view) => set({ view }),
   sidebarOpen: false,
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),

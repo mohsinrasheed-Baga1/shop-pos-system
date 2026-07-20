@@ -23,17 +23,22 @@ export async function PUT(
     data: {
       name: body.name,
       categoryId: body.categoryId || null,
+      vendorId: body.vendorId || null,
       costPrice: Number(body.costPrice) || 0,
       salePrice: Number(body.salePrice) || 0,
+      wholesalePrice: Number(body.wholesalePrice) || 0,
       unit: body.unit || "piece",
       stock: newStock,
+      storeStock: Number(body.storeStock) ?? prevStock,
       minStock: Number(body.minStock) || 0,
       taxRate: Number(body.taxRate) || 0,
+      expiryDate: body.expiryDate ? new Date(body.expiryDate) : null,
+      manufacturingDate: body.manufacturingDate ? new Date(body.manufacturingDate) : null,
       hasBarcode: body.hasBarcode !== false,
       image: body.image || null,
       active: body.active !== false,
     },
-    include: { category: true },
+    include: { category: true, vendor: true },
   });
 
   if (stockDiff !== 0) {

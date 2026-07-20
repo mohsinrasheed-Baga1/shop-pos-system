@@ -17,6 +17,9 @@ import {
   Moon,
   Sun,
   CreditCard,
+  LayoutDashboard,
+  Warehouse,
+  Truck,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -30,6 +33,10 @@ import { ReportsView } from "@/components/pos/views/reports-view";
 import { UsersView } from "@/components/pos/views/users-view";
 import { SettingsView } from "@/components/pos/views/settings-view";
 import { CardsView } from "@/components/pos/views/cards-view";
+import { DashboardView } from "@/components/pos/views/dashboard-view";
+import { StoreView } from "@/components/pos/views/store-view";
+import { VendorsView } from "@/components/pos/views/vendors-view";
+import { NotificationsBell } from "@/components/pos/notifications-bell";
 import { toast } from "sonner";
 
 interface AppShellProps {
@@ -38,8 +45,11 @@ interface AppShellProps {
 }
 
 const NAV: { id: View; label: string; icon: any; minRole?: string }[] = [
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { id: "pos", label: "Sell (POS)", icon: ShoppingCart },
   { id: "products", label: "Products", icon: Package },
+  { id: "store", label: "Main Store", icon: Warehouse },
+  { id: "vendors", label: "Vendors", icon: Truck },
   { id: "cards", label: "Shop Cards", icon: CreditCard },
   { id: "sales", label: "Sales History", icon: Receipt },
   { id: "reports", label: "Reports", icon: BarChart3 },
@@ -79,12 +89,18 @@ export function AppShell({ user, settings }: AppShellProps) {
         return <SalesView />;
       case "reports":
         return <ReportsView />;
+      case "dashboard":
+        return <DashboardView />;
+      case "store":
+        return <StoreView />;
+      case "vendors":
+        return <VendorsView />;
       case "users":
         return user.role === "ADMIN" ? <UsersView /> : <PosView settings={settings} />;
       case "settings":
         return user.role === "ADMIN" ? <SettingsView /> : <PosView settings={settings} />;
       default:
-        return <PosView settings={settings} />;
+        return <DashboardView />;
     }
   }
 

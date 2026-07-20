@@ -66,17 +66,22 @@ export async function POST(req: NextRequest) {
       barcode,
       barcodeType,
       categoryId: body.categoryId || null,
+      vendorId: body.vendorId || null,
       costPrice: Number(body.costPrice) || 0,
       salePrice: Number(body.salePrice) || 0,
+      wholesalePrice: Number(body.wholesalePrice) || 0,
       unit: body.unit || "piece",
       stock: Number(body.stock) || 0,
+      storeStock: Number(body.storeStock) || 0,
       minStock: Number(body.minStock) || 0,
       taxRate: Number(body.taxRate) || 0,
+      expiryDate: body.expiryDate ? new Date(body.expiryDate) : null,
+      manufacturingDate: body.manufacturingDate ? new Date(body.manufacturingDate) : null,
       hasBarcode,
       image: body.image || null,
       active: body.active !== false,
     },
-    include: { category: true },
+    include: { category: true, vendor: true },
   });
 
   // stock log for initial stock

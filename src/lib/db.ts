@@ -37,12 +37,25 @@ CREATE TABLE IF NOT EXISTS Category (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS Category_name_key ON Category(name);
 
+CREATE TABLE IF NOT EXISTS Vendor (
+  id TEXT PRIMARY KEY NOT NULL,
+  name TEXT NOT NULL,
+  companyName TEXT,
+  phone TEXT,
+  address TEXT,
+  note TEXT,
+  active BOOLEAN NOT NULL DEFAULT 1,
+  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt DATETIME NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS Product (
   id TEXT PRIMARY KEY NOT NULL,
   name TEXT NOT NULL,
   barcode TEXT NOT NULL,
   barcodeType TEXT NOT NULL DEFAULT 'CODE128',
   categoryId TEXT,
+  vendorId TEXT,
   costPrice REAL NOT NULL DEFAULT 0,
   salePrice REAL NOT NULL DEFAULT 0,
   wholesalePrice REAL NOT NULL DEFAULT 0,
@@ -52,12 +65,14 @@ CREATE TABLE IF NOT EXISTS Product (
   minStock REAL NOT NULL DEFAULT 0,
   taxRate REAL NOT NULL DEFAULT 0,
   expiryDate DATETIME,
+  manufacturingDate DATETIME,
   hasBarcode BOOLEAN NOT NULL DEFAULT 1,
   image TEXT,
   active BOOLEAN NOT NULL DEFAULT 1,
   createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updatedAt DATETIME NOT NULL,
-  FOREIGN KEY (categoryId) REFERENCES Category(id) ON DELETE SET NULL
+  FOREIGN KEY (categoryId) REFERENCES Category(id) ON DELETE SET NULL,
+  FOREIGN KEY (vendorId) REFERENCES Vendor(id) ON DELETE SET NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS Product_barcode_key ON Product(barcode);
 
@@ -183,6 +198,8 @@ const COLUMN_ADDITIONS: Record<string, [string, string][]> = {
     ["wholesalePrice", "REAL NOT NULL DEFAULT 0"],
     ["storeStock", "REAL NOT NULL DEFAULT 0"],
     ["expiryDate", "DATETIME"],
+    ["manufacturingDate", "DATETIME"],
+    ["vendorId", "TEXT"],
   ],
   Sale: [
     ["cardId", "TEXT"],

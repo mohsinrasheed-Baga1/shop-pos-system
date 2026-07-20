@@ -1,0 +1,803 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import {
+     5→  Plus,
+     6→  Search,
+     7→  Pencil,
+     8→  Trash2,
+     9→  Package,
+    10→  Printer,
+    11→  Barcode as BarcodeIcon,
+    12→  AlertTriangle,
+    13→  RefreshCw,
+    14→} from "lucide-react";
+    15→import { Button } from "@/components/ui/button";
+    16→import { Input } from "@/components/ui/input";
+    17→import { Label } from "@/components/ui/label";
+    18→import { Card, CardContent } from "@/components/ui/card";
+    19→import { Badge } from "@/components/ui/badge";
+    20→import { Switch } from "@/components/ui/switch";
+    21→import {
+    22→  Table,
+    23→  TableBody,
+    24→  TableCell,
+    25→  TableHead,
+    26→  TableHeader,
+    27→  TableRow,
+    28→} from "@/components/ui/table";
+    29→import {
+    30→  Dialog,
+    31→  DialogContent,
+    32→  DialogHeader,
+    33→  DialogTitle,
+    34→  DialogFooter,
+    35→} from "@/components/ui/dialog";
+    36→import {
+    37→  Select,
+    38→  SelectContent,
+    39→  SelectItem,
+    40→  SelectTrigger,
+    41→  SelectValue,
+    42→} from "@/components/ui/select";
+    43→import {
+    44→  AlertDialog,
+    45→  AlertDialogAction,
+    46→  AlertDialogCancel,
+    47→  AlertDialogContent,
+    48→  AlertDialogDescription,
+    49→  AlertDialogFooter,
+    50→  AlertDialogHeader,
+    51→  AlertDialogTitle,
+    52→} from "@/components/ui/alert-dialog";
+    53→import { toast } from "sonner";
+    54→import { formatMoney, unitLabel } from "@/lib/pos-utils";
+    55→import { BarcodeDisplay } from "@/components/barcode/barcode-display";
+    56→import type { Product, Category } from "@/types";
+    57→
+    58→interface ProductsViewProps {
+    59→  userRole: string;
+    60→}
+    61→
+    62→const UNITS = [
+    63→  { v: "piece", l: "Piece" },
+    64→  { v: "kg", l: "Kg" },
+    65→  { v: "gram", l: "Gram" },
+    66→  { v: "litre", l: "Litre" },
+    67→  { v: "ml", l: "Millilitre" },
+    68→  { v: "dozen", l: "Dozen" },
+    69→  { v: "metre", l: "Metre" },
+    70→  { v: "feet", l: "Feet" },
+    71→];
+    72→
+    73→const emptyForm = {
+    74→  name: "",
+    75→  barcode: "",
+    76→  categoryId: "",
+    77→  costPrice: "",
+    78→  salePrice: "",
+    79→  unit: "piece",
+    80→  stock: "",
+    81→  minStock: "",
+    82→  taxRate: "",
+    83→  hasBarcode: true,
+    84→  active: true,
+    85→};
+    86→
+    87→export function ProductsView({ userRole }: ProductsViewProps) {
+    88→  const canManage = userRole !== "CASHIER";
+    89→  const [products, setProducts] = React.useState<Product[]>([]);
+    90→  const [categories, setCategories] = React.useState<Category[]>([]);
+    91→  const [q, setQ] = React.useState("");
+    92→  const [activeCat, setActiveCat] = React.useState("all");
+    93→  const [loading, setLoading] = React.useState(true);
+    94→  const [dialogOpen, setDialogOpen] = React.useState(false);
+    95→  const [editId, setEditId] = React.useState<string | null>(null);
+    96→  const [form, setForm] = React.useState<any>(emptyForm);
+    97→  const [saving, setSaving] = React.useState(false);
+    98→  const [deleteId, setDeleteId] = React.useState<string | null>(null);
+    99→  const [printProduct, setPrintProduct] = React.useState<Product | null>(null);
+   100→
+   101→  const loadProducts = React.useCallback(async () => {
+   102→    setLoading(true);
+   103→    try {
+   104→      const params = new URLSearchParams();
+   105→      if (q) params.set("q", q);
+   106→      if (activeCat !== "all") params.set("categoryId", activeCat);
+   107→      const res = await fetch(`/api/products?${params.toString()}`, {
+   108→        cache: "no-store",
+   109→      });
+   110→      const data = await res.json();
+   111→      setProducts(data.products || []);
+   112→    } catch {
+   113→      toast.error("Failed to load products");
+   114→    } finally {
+   115→      setLoading(false);
+   116→    }
+   117→  }, [q, activeCat]);
+   118→
+   119→  const loadCategories = React.useCallback(async () => {
+   120→    try {
+   121→      const res = await fetch("/api/categories", { cache: "no-store" });
+   122→      const data = await res.json();
+   123→      setCategories(data.categories || []);
+   124→    } catch {}
+   125→  }, []);
+   126→
+   127→  React.useEffect(() => {
+   128→    loadCategories();
+   129→  }, [loadCategories]);
+   130→
+   131→  React.useEffect(() => {
+   132→    const t = setTimeout(loadProducts, 200);
+   133→    return () => clearTimeout(t);
+   134→  }, [loadProducts]);
+   135→
+   136→  function openAdd() {
+   137→    setForm(emptyForm);
+   138→    setEditId(null);
+   139→    setDialogOpen(true);
+   140→  }
+   141→
+   142→  function openEdit(p: Product) {
+   143→    setForm({
+   144→      name: p.name,
+   145→      barcode: p.barcodeType === "COMPANY" ? p.barcode : "",
+   146→      categoryId: p.categoryId || "",
+   147→      costPrice: p.costPrice.toString(),
+   148→      salePrice: p.salePrice.toString(),
+   149→      unit: p.unit,
+   150→      stock: p.stock.toString(),
+   151→      minStock: p.minStock.toString(),
+   152→      taxRate: p.taxRate.toString(),
+   153→      hasBarcode: p.hasBarcode,
+   154→      active: p.active,
+   155→    });
+   156→    setEditId(p.id);
+   157→    setDialogOpen(true);
+   158→  }
+   159→
+   160→  async function handleSave() {
+   161→    if (!form.name.trim()) {
+   162→      toast.error("Name is required");
+   163→      return;
+   164→    }
+   165→    if (Number(form.salePrice) <= 0) {
+   166→      toast.error("Sale price is required");
+   167→      return;
+   168→    }
+   169→    setSaving(true);
+   170→    try {
+   171→      const body = {
+   172→        name: form.name.trim(),
+   173→        barcode: form.barcode.trim(),
+   174→        categoryId: form.categoryId || null,
+   175→        costPrice: Number(form.costPrice) || 0,
+   176→        salePrice: Number(form.salePrice) || 0,
+   177→        unit: form.unit,
+   178→        stock: Number(form.stock) || 0,
+   179→        minStock: Number(form.minStock) || 0,
+   180→        taxRate: Number(form.taxRate) || 0,
+   181→        hasBarcode: form.hasBarcode,
+   182→        active: form.active,
+   183→      };
+   184→      const url = editId
+   185→        ? `/api/products/${editId}`
+   186→        : "/api/products";
+   187→      const method = editId ? "PUT" : "POST";
+   188→      const res = await fetch(url, {
+   189→        method,
+   190→        headers: { "Content-Type": "application/json" },
+   191→        body: JSON.stringify(body),
+   192→      });
+   193→      const data = await res.json();
+   194→      if (!res.ok) {
+   195→        toast.error(data.error || "Failed to save");
+   196→        setSaving(false);
+   197→        return;
+   198→      }
+   199→      toast.success(editId ? "Product updated" : "Product added");
+   200→      setDialogOpen(false);
+   201→      loadProducts();
+   202→    } catch {
+   203→      toast.error("Network error");
+   204→    } finally {
+   205→      setSaving(false);
+   206→    }
+   207→  }
+   208→
+   209→  async function handleDelete() {
+   210→    if (!deleteId) return;
+   211→    try {
+   212→      const res = await fetch(`/api/products/${deleteId}`, {
+   213→        method: "DELETE",
+   214→      });
+   215→      if (!res.ok) {
+   216→        const d = await res.json();
+   217→        toast.error(d.error || "Failed to delete");
+   218→        return;
+   219→      }
+   220→      toast.success("Product deleted");
+   221→      setDeleteId(null);
+   222→      loadProducts();
+   223→    } catch {
+   224→      toast.error("Network error");
+   225→    }
+   226→  }
+   227→
+   228→  return (
+   229→    <div className="space-y-4">
+   230→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+   231→        <div>
+   232→          <h1 className="text-2xl font-bold flex items-center gap-2">
+   233→            <Package className="w-6 h-6 text-emerald-600" />
+   234→            Products
+   235→          </h1>
+   236→          <p className="text-sm text-muted-foreground mt-1">
+   237→            Manage all items in your shop
+   238→          </p>
+   239→        </div>
+   240→        <div className="flex gap-2">
+   241→          <Button variant="outline" onClick={loadProducts}>
+   242→            <RefreshCw className="w-4 h-4 mr-2" /> Refresh
+   243→          </Button>
+   244→          {canManage && (
+   245→            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openAdd}>
+   246→              <Plus className="w-4 h-4 mr-2" /> New Product
+   247→            </Button>
+   248→          )}
+   249→        </div>
+   250→      </div>
+   251→
+   252→      <div className="flex flex-col sm:flex-row gap-2">
+   253→        <div className="relative flex-1">
+   254→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+   255→          <Input
+   256→            placeholder="Search by name or barcode..."
+   257→            value={q}
+   258→            onChange={(e) => setQ(e.target.value)}
+   259→            className="pl-10"
+   260→          />
+   261→        </div>
+   262→        <Select value={activeCat} onValueChange={setActiveCat}>
+   263→          <SelectTrigger className="sm:w-56">
+   264→            <SelectValue placeholder="Category" />
+   265→          </SelectTrigger>
+   266→          <SelectContent>
+   267→            <SelectItem value="all">All</SelectItem>
+   268→            {categories.map((c) => (
+   269→              <SelectItem key={c.id} value={c.id}>
+   270→                {c.name}
+   271→              </SelectItem>
+   272→            ))}
+   273→          </SelectContent>
+   274→        </Select>
+   275→      </div>
+   276→
+   277→      <Card>
+   278→        <CardContent className="p-0">
+   279→          {loading ? (
+   280→            <div className="p-8 space-y-2">
+   281→              {Array.from({ length: 5 }).map((_, i) => (
+   282→                <div key={i} className="h-12 rounded bg-muted animate-pulse" />
+   283→              ))}
+   284→            </div>
+   285→          ) : products.length === 0 ? (
+   286→            <div className="py-12 text-center text-muted-foreground">
+   287→              <Package className="w-10 h-10 mx-auto mb-2 opacity-50" />
+   288→              No products found
+   289→            </div>
+   290→          ) : (
+   291→            <div className="overflow-x-auto">
+   292→              <Table>
+   293→                <TableHeader>
+   294→                  <TableRow>
+   295→                    <TableHead>Name</TableHead>
+   296→                    <TableHead>Barcode</TableHead>
+   297→                    <TableHead>Category</TableHead>
+   298→                    <TableHead className="text-right">Cost</TableHead>
+   299→                    <TableHead className="text-right">Sale</TableHead>
+   300→                    <TableHead className="text-right">Stock</TableHead>
+   301→                    <TableHead className="text-right">Actions</TableHead>
+   302→                  </TableRow>
+   303→                </TableHeader>
+   304→                <TableBody>
+   305→                  {products.map((p) => (
+   306→                    <TableRow key={p.id}>
+   307→                      <TableCell className="font-medium">
+   308→                        <div className="flex items-center gap-2">
+   309→                          <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
+   310→                            <Package className="w-4 h-4 text-emerald-600" />
+   311→                          </div>
+   312→                          <div>
+   313→                            <div>{p.name}</div>
+   314→                            <div className="text-xs text-muted-foreground">
+   315→                              {unitLabel(p.unit)}
+   316→                            </div>
+   317→                          </div>
+   318→                        </div>
+   319→                      </TableCell>
+   320→                      <TableCell className="text-xs font-mono">
+   321→                        {p.barcode}
+   322→                        {p.barcodeType !== "COMPANY" && (
+   323→                          <Badge variant="outline" className="ml-1 text-[10px]">
+   324→                            Auto
+   325→                          </Badge>
+   326→                        )}
+   327→                      </TableCell>
+   328→                      <TableCell>{p.category?.name || "-"}</TableCell>
+   329→                      <TableCell className="text-right text-muted-foreground">
+   330→                        {formatMoney(p.costPrice)}
+   331→                      </TableCell>
+   332→                      <TableCell className="text-right font-bold text-emerald-700">
+   333→                        {formatMoney(p.salePrice)}
+   334→                      </TableCell>
+   335→                      <TableCell className="text-right">
+   336→                        <span
+   337→                          className={`font-medium ${
+   338→                            p.stock <= 0
+   339→                              ? "text-red-600"
+   340→                              : p.stock <= p.minStock
+   341→                              ? "text-amber-600"
+   342→                              : ""
+   343→                          }`}
+   344→                        >
+   345→                          {p.stock}
+   346→                        </span>
+   347→                        {p.stock <= p.minStock && (
+   348→                          <AlertTriangle className="w-3 h-3 inline mr-1 text-amber-500" />
+   349→                        )}
+   350→                      </TableCell>
+   351→                      <TableCell className="text-right">
+   352→                        <div className="flex gap-1 justify-end">
+   353→                          <Button
+   354→                            size="icon"
+   355→                            variant="ghost"
+   356→                            className="h-8 w-8"
+   357→                            onClick={() => setPrintProduct(p)}
+   358→                            title="Print Barcode"
+   359→                          >
+   360→                            <BarcodeIcon className="w-4 h-4 text-emerald-600" />
+   361→                          </Button>
+   362→                          {canManage && (
+   363→                            <>
+   364→                              <Button
+   365→                                size="icon"
+   366→                                variant="ghost"
+   367→                                className="h-8 w-8"
+   368→                                onClick={() => openEdit(p)}
+   369→                              >
+   370→                                <Pencil className="w-4 h-4" />
+   371→                              </Button>
+   372→                              <Button
+   373→                                size="icon"
+   374→                                variant="ghost"
+   375→                                className="h-8 w-8 text-red-600 hover:bg-red-50"
+   376→                                onClick={() => setDeleteId(p.id)}
+   377→                              >
+   378→                                <Trash2 className="w-4 h-4" />
+   379→                              </Button>
+   380→                            </>
+   381→                          )}
+   382→                        </div>
+   383→                      </TableCell>
+   384→                    </TableRow>
+   385→                  ))}
+   386→                </TableBody>
+   387→              </Table>
+   388→            </div>
+   389→          )}
+   390→        </CardContent>
+   391→      </Card>
+   392→
+   393→      {/* Add/Edit dialog */}
+   394→      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+   395→        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+   396→          <DialogHeader>
+   397→            <DialogTitle>
+   398→              {editId ? "Edit Product" : "Add New Product"}
+   399→            </DialogTitle>
+   400→          </DialogHeader>
+   401→          <div className="space-y-4">
+   402→            <div className="space-y-2">
+   403→              <Label>Product Name *</Label>
+   404→              <Input
+   405→                value={form.name}
+   406→                onChange={(e) => setForm({ ...form, name: e.target.value })}
+   407→                placeholder="e.g. Sugar, Ghee, Rice"
+   408→              />
+   409→            </div>
+   410→
+   411→            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-2">
+   412→              <div className="flex items-center justify-between">
+   413→                <Label className="flex items-center gap-2">
+   414→                  <BarcodeIcon className="w-4 h-4 text-emerald-600" />
+   415→                  Has company barcode?
+   416→                </Label>
+   417→                <Switch
+   418→                  checked={form.hasBarcode}
+   419→                  onCheckedChange={(c) => setForm({ ...form, hasBarcode: c })}
+   420→                />
+   421→              </div>
+   422→              {form.hasBarcode ? (
+   423→                <Input
+   424→                  value={form.barcode}
+   425→                  onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+   426→                  placeholder="Scan or type the barcode..."
+   427→                  className="text-left"
+   428→                />
+   429→              ) : (
+   430→                <p className="text-xs text-emerald-700">
+   431→                  ✓ A barcode will be auto-generated for this product (best for
+   432→                  loose items like sugar, ghee, etc.)
+   433→                </p>
+   434→              )}
+   435→              {form.barcode && (
+   436→                <div className="bg-white rounded p-2 flex justify-center">
+   437→                  <BarcodeDisplay
+   438→                    value={form.barcode}
+   439→                    format="EAN13"
+   440→                    height={50}
+   441→                  />
+   442→                </div>
+   443→              )}
+   444→            </div>
+   445→
+   446→            <div className="grid grid-cols-2 gap-3">
+   447→              <div className="space-y-2">
+   448→                <Label>Category</Label>
+   449→                <Select
+   450→                  value={form.categoryId || "none"}
+   451→                  onValueChange={(v) =>
+   452→                    setForm({ ...form, categoryId: v === "none" ? "" : v })
+   453→                  }
+   454→                >
+   455→                  <SelectTrigger>
+   456→                    <SelectValue placeholder="Select" />
+   457→                  </SelectTrigger>
+   458→                  <SelectContent>
+   459→                    <SelectItem value="none">No category</SelectItem>
+   460→                    {categories.map((c) => (
+   461→                      <SelectItem key={c.id} value={c.id}>
+   462→                        {c.name}
+   463→                      </SelectItem>
+   464→                    ))}
+   465→                  </SelectContent>
+   466→                </Select>
+   467→              </div>
+   468→              <div className="space-y-2">
+   469→                <Label>Unit</Label>
+   470→                <Select
+   471→                  value={form.unit}
+   472→                  onValueChange={(v) => setForm({ ...form, unit: v })}
+   473→                >
+   474→                  <SelectTrigger>
+   475→                    <SelectValue />
+   476→                  </SelectTrigger>
+   477→                  <SelectContent>
+   478→                    {UNITS.map((u) => (
+   479→                      <SelectItem key={u.v} value={u.v}>
+   480→                        {u.l}
+   481→                      </SelectItem>
+   482→                    ))}
+   483→                  </SelectContent>
+   484→                </Select>
+   485→              </div>
+   486→            </div>
+   487→
+   488→            <div className="grid grid-cols-2 gap-3">
+   489→              <div className="space-y-2">
+   490→                <Label>Cost Price</Label>
+   491→                <Input
+   492→                  type="number"
+   493→                  value={form.costPrice}
+   494→                  onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
+   495→                  className="text-left"
+   496→                />
+   497→              </div>
+   498→              <div className="space-y-2">
+   499→                <Label>Sale Price *</Label>
+   500→                <Input
+   501→                  type="number"
+   502→                  value={form.salePrice}
+   503→                  onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
+   504→                  className="text-left"
+   505→                />
+   506→              </div>
+   507→            </div>
+   508→
+   509→            <div className="grid grid-cols-3 gap-3">
+   510→              <div className="space-y-2">
+   511→                <Label>Stock</Label>
+   512→                <Input
+   513→                  type="number"
+   514→                  value={form.stock}
+   515→                  onChange={(e) => setForm({ ...form, stock: e.target.value })}
+   516→                  className="text-left"
+   517→                />
+   518→              </div>
+   519→              <div className="space-y-2">
+   520→                <Label>Low Stock Alert</Label>
+   521→                <Input
+   522→                  type="number"
+   523→                  value={form.minStock}
+   524→                  onChange={(e) => setForm({ ...form, minStock: e.target.value })}
+   525→                  className="text-left"
+   526→                />
+   527→              </div>
+   528→              <div className="space-y-2">
+   529→                <Label>Tax %</Label>
+   530→                <Input
+   531→                  type="number"
+   532→                  value={form.taxRate}
+   533→                  onChange={(e) => setForm({ ...form, taxRate: e.target.value })}
+   534→                  className="text-left"
+   535→                />
+   536→              </div>
+   537→            </div>
+   538→
+   539→            <div className="flex items-center justify-between rounded-lg border p-3">
+   540→              <Label>Product is active</Label>
+   541→              <Switch
+   542→                checked={form.active}
+   543→                onCheckedChange={(c) => setForm({ ...form, active: c })}
+   544→              />
+   545→            </div>
+   546→          </div>
+   547→          <DialogFooter>
+   548→            <Button
+   549→              variant="outline"
+   550→              onClick={() => setDialogOpen(false)}
+   551→              disabled={saving}
+   552→            >
+   553→              Cancel
+   554→            </Button>
+   555→            <Button
+   556→              className="bg-emerald-600 hover:bg-emerald-700"
+   557→              onClick={handleSave}
+   558→              disabled={saving}
+   559→            >
+   560→              {saving ? "Saving..." : "Save"}
+   561→            </Button>
+   562→          </DialogFooter>
+   563→        </DialogContent>
+   564→      </Dialog>
+   565→
+   566→      {/* delete confirm */}
+   567→      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+   568→        <AlertDialogContent>
+   569→          <AlertDialogHeader>
+   570→            <AlertDialogTitle>Delete product?</AlertDialogTitle>
+   571→            <AlertDialogDescription>
+   572→              This action cannot be undone.
+   573→            </AlertDialogDescription>
+   574→          </AlertDialogHeader>
+   575→          <AlertDialogFooter>
+   576→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+   577→            <AlertDialogAction
+   578→              className="bg-red-600 hover:bg-red-700"
+   579→              onClick={handleDelete}
+   580→            >
+   581→              Delete
+   582→            </AlertDialogAction>
+   583→          </AlertDialogFooter>
+   584→        </AlertDialogContent>
+   585→      </AlertDialog>
+   586→
+   587→      {/* print barcode dialog */}
+   588→      <BarcodePrintDialog
+   589→        product={printProduct}
+   590→        onClose={() => setPrintProduct(null)}
+   591→      />
+   592→    </div>
+   593→  );
+   594→}
+   595→
+   596→function BarcodePrintDialog({
+   597→  product,
+   598→  onClose,
+   599→}: {
+   600→  product: Product | null;
+   601→  onClose: () => void;
+   602→}) {
+   603→  const [count, setCount] = React.useState(1);
+   604→  const [shopName, setShopName] = React.useState<string>("");
+   605→  const labelRef = React.useRef<HTMLDivElement>(null);
+   606→
+   607→  // Fetch shop name from settings (used at the top of the sticker)
+   608→  React.useEffect(() => {
+   609→    if (!product) return;
+   610→    let active = true;
+   611→    fetch("/api/settings", { cache: "no-store" })
+   612→      .then((r) => r.json())
+   613→      .then((d) => {
+   614→        if (!active) return;
+   615→        const s = d?.settings;
+   616→        setShopName(s?.shopName?.trim() || "My Shop");
+   617→      })
+   618→      .catch(() => {
+   619→        if (active) setShopName("My Shop");
+   620→      });
+   621→    return () => {
+   622→      active = false;
+   623→    };
+   624→  }, [product]);
+   625→
+   626→  if (!product) return null;
+   627→
+   628→  function handlePrint() {
+   629→    const content = labelRef.current;
+   630→    if (!content) return;
+   631→    const win = window.open("", "_blank", "width=400,height=400");
+   632→    if (!win) {
+   633→      toast.error("Pop-up blocked. Please allow pop-ups to print.");
+   634→      return;
+   635→    }
+   636→    win.document.write(`
+   637→      <html dir="ltr"><head><title>Sticker ${product!.name}</title>
+   638→      <style>
+   639→        @page { size: 50mm 25mm; margin: 0; }
+   640→        html, body { margin: 0; padding: 0; }
+   641→        body { width: 50mm; }
+   642→        * { box-sizing: border-box; }
+   643→        .sticker {
+   644→          width: 50mm;
+   645→          height: 25mm;
+   646→          border: 1px dashed #999;
+   647→          padding: 1mm 1.5mm;
+   648→          display: flex;
+   649→          flex-direction: column;
+   650→          align-items: center;
+   651→          justify-content: space-between;
+   652→          font-family: Tahoma, Arial, sans-serif;
+   653→          color: #000;
+   654→          background: #fff;
+   655→          text-align: center;
+   656→          overflow: hidden;
+   657→          page-break-inside: avoid;
+   658→        }
+   659→        .shop-name {
+   660→          font-size: 7px;
+   661→          font-weight: bold;
+   662→          line-height: 1.05;
+   663→          width: 100%;
+   664→        }
+   665→        .barcode {
+   666→          flex: 1;
+   667→          display: flex;
+   668→          align-items: center;
+   669→          justify-content: center;
+   670→          width: 100%;
+   671→          overflow: hidden;
+   672→        }
+   673→        .product-name {
+   674→          font-size: 7px;
+   675→          font-weight: 600;
+   676→          line-height: 1.05;
+   677→          width: 100%;
+   678→        }
+   679→      </style></head><body>${content.innerHTML}</body></html>
+   680→    `);
+   681→    win.document.close();
+   682→    win.focus();
+   683→    setTimeout(() => {
+   684→      win.print();
+   685→      setTimeout(() => win.close(), 250);
+   686→    }, 350);
+   687→  }
+   688→
+   689→  // Inline sticker style — matches the printed layout exactly (50mm × 25mm).
+   690→  const stickerStyle: React.CSSProperties = {
+   691→    width: "50mm",
+   692→    height: "25mm",
+   693→    border: "1px dashed #d1d5db",
+   694→    padding: "1mm 1.5mm",
+   695→    display: "flex",
+   696→    flexDirection: "column",
+   697→    alignItems: "center",
+   698→    justifyContent: "space-between",
+   699→    color: "#000",
+   700→    background: "#fff",
+   701→    textAlign: "center",
+   702→    overflow: "hidden",
+   703→  };
+   704→
+   705→  return (
+   706→    <Dialog open={!!product} onOpenChange={(o) => !o && onClose()}>
+   707→      <DialogContent className="max-w-md">
+   708→        <DialogHeader>
+   709→          <DialogTitle>Print Barcode Sticker</DialogTitle>
+   710→        </DialogHeader>
+   711→        <div className="space-y-3">
+   712→          <div className="text-center text-xs text-muted-foreground">
+   713→            Sticker size: 50mm × 25mm. Shop name (top) — Barcode (middle) —
+   714→            Product name (bottom).
+   715→          </div>
+   716→          <div className="flex items-center gap-2">
+   717→            <Label className="whitespace-nowrap">Quantity</Label>
+   718→            <Input
+   719→              type="number"
+   720→              min={1}
+   721→              max={100}
+   722→              value={count}
+   723→              onChange={(e) =>
+   724→                setCount(
+   725→                  Math.min(100, Math.max(1, Number(e.target.value) || 1))
+   726→                )
+   727→              }
+   728→              className="text-left w-24"
+   729→            />
+   730→          </div>
+   731→          <div
+   732→            ref={labelRef}
+   733→            className="bg-white border rounded p-2 flex flex-wrap gap-1 justify-center"
+   734→          >
+   735→            {Array.from({ length: count }).map((_, i) => (
+   736→              <div key={i} className="sticker" style={stickerStyle}>
+   737→                {/* TOP — shop name */}
+   738→                <div
+   739→                  className="shop-name"
+   740→                  style={{
+   741→                    fontSize: "7px",
+   742→                    fontWeight: "bold",
+   743→                    lineHeight: 1.05,
+   744→                    width: "100%",
+   745→                  }}
+   746→                >
+   747→                  {shopName || "My Shop"}
+   748→                </div>
+   749→                {/* MIDDLE — barcode */}
+   750→                <div
+   751→                  className="barcode"
+   752→                  style={{
+   753→                    flex: 1,
+   754→                    display: "flex",
+   755→                    alignItems: "center",
+   756→                    justifyContent: "center",
+   757→                    width: "100%",
+   758→                    overflow: "hidden",
+   759→                  }}
+   760→                >
+   761→                  <BarcodeDisplay
+   762→                    value={product.barcode}
+   763→                    format={product.barcodeType === "EAN13" ? "EAN13" : "CODE128"}
+   764→                    height={28}
+   765→                    width={1}
+   766→                    displayValue={false}
+   767→                  />
+   768→                </div>
+   769→                {/* BOTTOM — product name */}
+   770→                <div
+   771→                  className="product-name"
+   772→                  style={{
+   773→                    fontSize: "7px",
+   774→                    fontWeight: 600,
+   775→                    lineHeight: 1.05,
+   776→                    width: "100%",
+   777→                    overflow: "hidden",
+   778→                    textOverflow: "ellipsis",
+   779→                    whiteSpace: "nowrap",
+   780→                  }}
+   781→                >
+   782→                  {product.name}
+   783→                </div>
+   784→              </div>
+   785→            ))}
+   786→          </div>
+   787→        </div>
+   788→        <DialogFooter>
+   789→          <Button variant="outline" onClick={onClose}>
+   790→            Close
+   791→          </Button>
+   792→          <Button
+   793→            className="bg-emerald-600 hover:bg-emerald-700"
+   794→            onClick={handlePrint}
+   795→          >
+   796→            <Printer className="w-4 h-4 mr-2" /> Print
+   797→          </Button>
+   798→        </DialogFooter>
+   799→      </DialogContent>
+   800→    </Dialog>
+   801→  );
+   802→}
+   803→

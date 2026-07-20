@@ -1,0 +1,725 @@
+"use client";
+
+import * as React from "react";
+import { format } from "date-fns";
+import {
+  Warehouse,
+  Package,
+  ArrowRightLeft,
+  ArrowDownToLine,
+  Search,
+  RefreshCw,
+  Boxes,
+  Store,
+  TrendingUp,
+  AlertTriangle,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { formatMoney, unitLabel } from "@/lib/pos-utils";
+import type { Product } from "@/types";
+
+type StoreProduct = Omit<Product, "category"> & {
+  category?: { name: string } | null;
+};
+
+interface StoreTransaction {
+  id: string;
+  productId: string;
+  product?: { name: string } | null;
+  productName?: string;
+  type: "INCOMING" | "TRANSFER" | "ADJUSTMENT";
+  quantity: number;
+  note: string | null;
+  createdAt: string;
+}
+
+interface StoreResponse {
+  products: StoreProduct[];
+  transactions: StoreTransaction[];
+}
+
+interface SummaryCardProps {
+  title: string;
+  value: string;
+  hint?: string;
+  icon: React.ReactNode;
+  loading: boolean;
+  accent?: "emerald" | "amber" | "slate" | "rose";
+}
+
+const SUMMARY_ACCENT: Record<
+  NonNullable<SummaryCardProps["accent"]>,
+  { wrap: string; iconBg: string; iconColor: string; value: string }
+> = {
+  emerald: {
+    wrap: "border-emerald-200/60 dark:border-emerald-900/40",
+    iconBg: "bg-emerald-100 dark:bg-emerald-900/40",
+    iconColor: "text-emerald-700 dark:text-emerald-300",
+    value: "text-emerald-700 dark:text-emerald-300",
+  },
+  amber: {
+    wrap: "border-amber-200/60 dark:border-amber-900/40",
+    iconBg: "bg-amber-100 dark:bg-amber-900/40",
+    iconColor: "text-amber-700 dark:text-amber-300",
+    value: "text-amber-700 dark:text-amber-300",
+  },
+  rose: {
+    wrap: "border-rose-200/60 dark:border-rose-900/40",
+    iconBg: "bg-rose-100 dark:bg-rose-900/40",
+    iconColor: "text-rose-700 dark:text-rose-300",
+    value: "text-rose-700 dark:text-rose-300",
+  },
+  slate: {
+    wrap: "border-slate-200/60 dark:border-slate-800/60",
+    iconBg: "bg-slate-100 dark:bg-slate-800/60",
+    iconColor: "text-slate-700 dark:text-slate-300",
+    value: "text-slate-800 dark:text-slate-100",
+  },
+};
+
+function SummaryCard({
+  title,
+  value,
+  hint,
+  icon,
+  loading,
+  accent = "emerald",
+}: SummaryCardProps) {
+  const a = SUMMARY_ACCENT[accent];
+  return (
+    <Card className={a.wrap}>
+      <CardContent className="p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              {title}
+            </p>
+            {loading ? (
+              <Skeleton className="mt-2 h-7 w-28" />
+            ) : (
+              <p className={`mt-2 text-2xl font-bold ${a.value}`}>{value}</p>
+            )}
+            {hint && (
+              <p className="mt-1 text-xs text-muted-foreground truncate">
+                {hint}
+              </p>
+            )}
+          </div>
+          <div
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${a.iconBg} ${a.iconColor}`}
+          >
+            {icon}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+type DialogMode =
+  | { kind: "receive"; product: StoreProduct }
+  | { kind: "transfer"; product: StoreProduct }
+  | null;
+
+const TYPE_BADGE: Record<
+  StoreTransaction["type"],
+  { label: string; className: string }
+> = {
+  INCOMING: {
+    label: "Incoming",
+    className:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300",
+  },
+  TRANSFER: {
+    label: "Transfer",
+    className:
+      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300",
+  },
+  ADJUSTMENT: {
+    label: "Adjustment",
+    className:
+      "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-300",
+  },
+};
+
+export function StoreView() {
+  const [loading, setLoading] = React.useState(true);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [storeProducts, setStoreProducts] = React.useState<StoreProduct[]>([]);
+  const [transactions, setTransactions] = React.useState<StoreTransaction[]>(
+    []
+  );
+  const [settings, setSettings] = React.useState<{
+    currency: string;
+    shopName: string;
+  } | null>(null);
+  const [q, setQ] = React.useState("");
+  const [tab, setTab] = React.useState<"inventory" | "history">("inventory");
+  const [dialog, setDialog] = React.useState<DialogMode>(null);
+  const [quantity, setQuantity] = React.useState("");
+  const [note, setNote] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+
+  const load = React.useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    if (silent) setRefreshing(true);
+    try {
+      const [storeRes, settingsRes] = await Promise.all([
+        fetch("/api/store", { cache: "no-store" }),
+        fetch("/api/settings", { cache: "no-store" }),
+      ]);
+      const storeData = (await storeRes.json()) as StoreResponse;
+      const settingsData = await settingsRes.json();
+      setStoreProducts(storeData.products || []);
+      setTransactions(storeData.transactions || []);
+      setSettings(settingsData.settings || null);
+    } catch {
+      toast.error("Failed to load store data");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  const currency = settings?.currency || "Rs";
+
+  const filteredProducts = React.useMemo(() => {
+    if (!q.trim()) return storeProducts;
+    const term = q.toLowerCase();
+    return storeProducts.filter(
+      (p) =>
+        p.name.toLowerCase().includes(term) ||
+        p.barcode?.toLowerCase().includes(term)
+    );
+  }, [storeProducts, q]);
+
+  const totalStoreItems = storeProducts.reduce(
+    (s, p) => s + (p.storeStock || 0),
+    0
+  );
+  const totalShopItems = storeProducts.reduce((s, p) => s + (p.stock || 0), 0);
+  const lowStoreStock = storeProducts.filter(
+    (p) => (p.storeStock || 0) <= (p.minStock || 0)
+  ).length;
+  const totalStoreValue = storeProducts.reduce(
+    (s, p) => s + (p.storeStock || 0) * (p.costPrice || 0),
+    0
+  );
+
+  function openReceive(product: StoreProduct) {
+    setDialog({ kind: "receive", product });
+    setQuantity("");
+    setNote("");
+  }
+
+  function openTransfer(product: StoreProduct) {
+    if ((product.storeStock || 0) <= 0) {
+      toast.error("No stock in store to transfer");
+      return;
+    }
+    setDialog({ kind: "transfer", product });
+    setQuantity("");
+    setNote("");
+  }
+
+  async function handleSubmit() {
+    if (!dialog) return;
+    const qty = Number(quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      toast.error("Enter a valid quantity");
+      return;
+    }
+    if (dialog.kind === "transfer" && qty > (dialog.product.storeStock || 0)) {
+      toast.error(
+        `Only ${dialog.product.storeStock} available in store stock`
+      );
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/store", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: dialog.product.id,
+          quantity: qty,
+          type: dialog.kind === "receive" ? "INCOMING" : "TRANSFER",
+          note: note.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || "Failed to save transaction");
+        setSaving(false);
+        return;
+      }
+      toast.success(
+        dialog.kind === "receive"
+          ? `Received ${qty} ${unitLabel(dialog.product.unit)} of ${dialog.product.name}`
+          : `Transferred ${qty} ${unitLabel(dialog.product.unit)} to shop`
+      );
+      setDialog(null);
+      await load(true);
+    } catch {
+      toast.error("Failed to save transaction");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-7xl space-y-5">
+      {/* Header */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-sm">
+            <Warehouse className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold sm:text-2xl">Main Store</h1>
+            <p className="text-sm text-muted-foreground">
+              Two-warehouse inventory: store (back) & shop (front) — receive
+              goods and transfer stock between them.
+            </p>
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => load(true)}
+          disabled={refreshing}
+          className="self-start sm:self-auto"
+        >
+          <RefreshCw
+            className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
+          />
+          Refresh
+        </Button>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard
+          title="Total Store Items"
+          value={totalStoreItems.toLocaleString("en-PK")}
+          hint="Back warehouse stock"
+          icon={<Boxes className="h-5 w-5" />}
+          loading={loading}
+          accent="emerald"
+        />
+        <SummaryCard
+          title="Total Shop Items"
+          value={totalShopItems.toLocaleString("en-PK")}
+          hint="Front shop stock"
+          icon={<Store className="h-5 w-5" />}
+          loading={loading}
+          accent="slate"
+        />
+        <SummaryCard
+          title="Low Store Stock"
+          value={lowStoreStock.toLocaleString("en-PK")}
+          hint={
+            lowStoreStock === 0
+              ? "All stocked"
+              : "Items at or below minimum"
+          }
+          icon={<AlertTriangle className="h-5 w-5" />}
+          loading={loading}
+          accent={lowStoreStock === 0 ? "emerald" : "amber"}
+        />
+        <SummaryCard
+          title="Total Store Value"
+          value={formatMoney(totalStoreValue, currency)}
+          hint="At cost price"
+          icon={<TrendingUp className="h-5 w-5" />}
+          loading={loading}
+          accent="emerald"
+        />
+      </div>
+
+      {/* Tabs */}
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v as "inventory" | "history")}
+      >
+        <TabsList>
+          <TabsTrigger value="inventory">
+            <Package className="h-4 w-4" />
+            Store Inventory
+          </TabsTrigger>
+          <TabsTrigger value="history">
+            <ArrowRightLeft className="h-4 w-4" />
+            Transaction History
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Inventory tab */}
+        <TabsContent value="inventory" className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or barcode..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="w-16">Unit</TableHead>
+                      <TableHead className="text-right">Store Stock</TableHead>
+                      <TableHead className="text-right">Shop Stock</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="text-right">Cost</TableHead>
+                      <TableHead className="text-right">Store Value</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      Array.from({ length: 6 }).map((_, i) => (
+                        <TableRow key={i}>
+                          {Array.from({ length: 8 }).map((__, j) => (
+                            <TableCell key={j}>
+                              <Skeleton className="h-5 w-full" />
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    ) : filteredProducts.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={8}
+                          className="h-32 text-center text-muted-foreground"
+                        >
+                          No products found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredProducts.map((p) => {
+                        const total = (p.storeStock || 0) + (p.stock || 0);
+                        const storeValue =
+                          (p.storeStock || 0) * (p.costPrice || 0);
+                        const lowStore =
+                          (p.storeStock || 0) <= (p.minStock || 0) &&
+                          (p.minStock || 0) > 0;
+                        return (
+                          <TableRow key={p.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                  <Package className="h-4 w-4" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate font-medium">
+                                    {p.name}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {p.barcode || "—"}
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-xs">
+                                {unitLabel(p.unit)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span
+                                className={
+                                  lowStore
+                                    ? "font-semibold text-amber-700 dark:text-amber-400"
+                                    : "font-medium"
+                                }
+                              >
+                                {p.storeStock ?? 0}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className="font-medium">
+                                {p.stock ?? 0}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {total}
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              {formatMoney(p.costPrice || 0, currency)}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold text-emerald-700 dark:text-emerald-400">
+                              {formatMoney(storeValue, currency)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8"
+                                  onClick={() => openReceive(p)}
+                                >
+                                  <ArrowDownToLine className="h-3.5 w-3.5" />
+                                  <span className="hidden sm:inline">
+                                    Receive
+                                  </span>
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-900/50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
+                                  onClick={() => openTransfer(p)}
+                                  disabled={(p.storeStock || 0) <= 0}
+                                >
+                                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                                  <span className="hidden sm:inline">
+                                    Transfer
+                                  </span>
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* History tab */}
+        <TabsContent value="history" className="space-y-3">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Store Transactions</CardTitle>
+              <CardDescription>
+                Receive and transfer history — most recent first
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="max-h-[32rem] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 bg-background">
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="text-right">Quantity</TableHead>
+                      <TableHead>Note</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      Array.from({ length: 6 }).map((_, i) => (
+                        <TableRow key={i}>
+                          {Array.from({ length: 5 }).map((__, j) => (
+                            <TableCell key={j}>
+                              <Skeleton className="h-5 w-full" />
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))
+                    ) : transactions.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="h-32 text-center text-muted-foreground"
+                        >
+                          No transactions yet
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      transactions.map((t) => {
+                        const badge = TYPE_BADGE[t.type] || TYPE_BADGE.ADJUSTMENT;
+                        const name =
+                          t.product?.name ||
+                          t.productName ||
+                          "Unknown product";
+                        return (
+                          <TableRow key={t.id}>
+                            <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                              {format(new Date(t.createdAt), "MMM d, yyyy")}
+                              <span className="ml-1 text-xs">
+                                {format(new Date(t.createdAt), "h:mm a")}
+                              </span>
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {name}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant="outline"
+                                className={`text-xs ${badge.className}`}
+                              >
+                                {badge.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className="font-semibold">
+                                {t.type === "INCOMING" ? "+" : ""}
+                                {t.quantity}
+                              </span>
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
+                              {t.note || "—"}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Receive / Transfer dialog */}
+      <Dialog
+        open={dialog !== null}
+        onOpenChange={(open) => !open && setDialog(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {dialog?.kind === "receive"
+                ? "Receive Goods"
+                : "Transfer to Shop"}
+            </DialogTitle>
+            <DialogDescription>
+              {dialog?.product && (
+                <>
+                  Product:{" "}
+                  <span className="font-medium text-foreground">
+                    {dialog.product.name}
+                  </span>{" "}
+                  ({unitLabel(dialog.product.unit)})
+                  {dialog.kind === "transfer" && (
+                    <>
+                      {" "}
+                      • Available in store:{" "}
+                      <span className="font-medium text-foreground">
+                        {dialog.product.storeStock}
+                      </span>
+                    </>
+                  )}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="qty">
+                Quantity{" "}
+                <span className="text-muted-foreground">
+                  ({dialog?.product && unitLabel(dialog.product.unit)})
+                </span>
+              </Label>
+              <Input
+                id="qty"
+                type="number"
+                min="1"
+                step="any"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="0"
+                autoFocus
+              />
+              {dialog?.kind === "transfer" && (
+                <p className="text-xs text-muted-foreground">
+                  Max transferable:{" "}
+                  <span className="font-medium">
+                    {dialog.product.storeStock}{" "}
+                    {unitLabel(dialog.product.unit)}
+                  </span>
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="note">Note (optional)</Label>
+              <Input
+                id="note"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder={
+                  dialog?.kind === "receive"
+                    ? "e.g. PO #1234, Supplier invoice"
+                    : "e.g. Shelf restock"
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDialog(null)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={saving || !quantity}
+              className={
+                dialog?.kind === "receive"
+                  ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                  : "bg-amber-600 text-white hover:bg-amber-700"
+              }
+            >
+              {saving ? "Saving..." : dialog?.kind === "receive" ? "Receive" : "Transfer"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

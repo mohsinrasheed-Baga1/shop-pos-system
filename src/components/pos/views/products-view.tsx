@@ -53,7 +53,7 @@ import {
 import { toast } from "sonner";
 import { formatMoney, unitLabel } from "@/lib/pos-utils";
 import { BarcodeDisplay } from "@/components/barcode/barcode-display";
-import type { Product, Category } from "@/types";
+import type { Product, Category, Vendor } from "@/types";
 
 interface ProductsViewProps {
   userRole: string;
@@ -74,20 +74,41 @@ const emptyForm = {
   name: "",
   barcode: "",
   categoryId: "",
+  vendorId: "",
   costPrice: "",
   salePrice: "",
   unit: "piece",
   stock: "",
   minStock: "",
   taxRate: "",
+  manufacturingDate: "",
+  expiryDate: "",
   hasBarcode: true,
   active: true,
 };
+
+function formatExpiryBadge(expiry: string | null) {
+  if (!expiry) return null;
+  const d = new Date(expiry);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  const label = d.toISOString().slice(0, 10);
+  if (days < 0) {
+    return { label, tone: "red" as const, days };
+  }
+  if (days <= 30) {
+    return { label, tone: "amber" as const, days };
+  }
+  return { label, tone: "default" as const, days };
+}
 
 export function ProductsView({ userRole }: ProductsViewProps) {
   const canManage = userRole !== "CASHIER";
   const [products, setProducts] = React.useState<Product[]>([]);
   const [categories, setCategories] = React.useState<Category[]>([]);
+  const [vendors, setVendors] = React.useState<Vendor[]>([]);
   const [q, setQ] = React.useState("");
   const [activeCat, setActiveCat] = React.useState("all");
   const [loading, setLoading] = React.useState(true);
@@ -124,9 +145,18 @@ export function ProductsView({ userRole }: ProductsViewProps) {
     } catch {}
   }, []);
 
+  const loadVendors = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/vendors", { cache: "no-store" });
+      const data = await res.json();
+      setVendors(data.vendors || []);
+    } catch {}
+  }, []);
+
   React.useEffect(() => {
     loadCategories();
-  }, [loadCategories]);
+    loadVendors();
+  }, [loadCategories, loadVendors]);
 
   React.useEffect(() => {
     const t = setTimeout(loadProducts, 200);
@@ -144,12 +174,19 @@ export function ProductsView({ userRole }: ProductsViewProps) {
       name: p.name,
       barcode: p.barcodeType === "COMPANY" ? p.barcode : "",
       categoryId: p.categoryId || "",
+      vendorId: p.vendorId || "",
       costPrice: p.costPrice.toString(),
       salePrice: p.salePrice.toString(),
       unit: p.unit,
       stock: p.stock.toString(),
       minStock: p.minStock.toString(),
       taxRate: p.taxRate.toString(),
+      manufacturingDate: p.manufacturingDate
+        ? new Date(p.manufacturingDate).toISOString().slice(0, 10)
+        : "",
+      expiryDate: p.expiryDate
+        ? new Date(p.expiryDate).toISOString().slice(0, 10)
+        : "",
       hasBarcode: p.hasBarcode,
       active: p.active,
     });
@@ -172,12 +209,15 @@ export function ProductsView({ userRole }: ProductsViewProps) {
         name: form.name.trim(),
         barcode: form.barcode.trim(),
         categoryId: form.categoryId || null,
+        vendorId: form.vendorId || null,
         costPrice: Number(form.costPrice) || 0,
         salePrice: Number(form.salePrice) || 0,
         unit: form.unit,
         stock: Number(form.stock) || 0,
         minStock: Number(form.minStock) || 0,
         taxRate: Number(form.taxRate) || 0,
+        manufacturingDate: form.manufacturingDate || null,
+        expiryDate: form.expiryDate || null,
         hasBarcode: form.hasBarcode,
         active: form.active,
       };
@@ -298,6 +338,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
                     <TableHead className="text-right">Cost</TableHead>
                     <TableHead className="text-right">Sale</TableHead>
                     <TableHead className="text-right">Stock</TableHead>
+                    <TableHead>Expiry</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -347,6 +388,43 @@ export function ProductsView({ userRole }: ProductsViewProps) {
                         {p.stock <= p.minStock && (
                           <AlertTriangle className="w-3 h-3 inline mr-1 text-amber-500" />
                         )}
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const exp = formatExpiryBadge(p.expiryDate);
+                          if (!exp) {
+                            return (
+                              <span className="text-muted-foreground text-xs">
+                                -
+                              </span>
+                            );
+                          }
+                          if (exp.tone === "red") {
+                            return (
+                              <Badge
+                                variant="outline"
+                                className="text-red-700 border-red-300 bg-red-50"
+                              >
+                                {exp.label} · Expired
+                              </Badge>
+                            );
+                          }
+                          if (exp.tone === "amber") {
+                            return (
+                              <Badge
+                                variant="outline"
+                                className="text-amber-700 border-amber-300 bg-amber-50"
+                              >
+                                {exp.label} · {exp.days}d
+                              </Badge>
+                            );
+                          }
+                          return (
+                            <Badge variant="outline" className="font-mono">
+                              {exp.label}
+                            </Badge>
+                          );
+                        })()}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex gap-1 justify-end">
@@ -534,6 +612,54 @@ export function ProductsView({ userRole }: ProductsViewProps) {
                   className="text-left"
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Manufacturing Date</Label>
+                <Input
+                  type="date"
+                  value={form.manufacturingDate}
+                  onChange={(e) =>
+                    setForm({ ...form, manufacturingDate: e.target.value })
+                  }
+                  className="text-left"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Expiry Date</Label>
+                <Input
+                  type="date"
+                  value={form.expiryDate}
+                  onChange={(e) =>
+                    setForm({ ...form, expiryDate: e.target.value })
+                  }
+                  className="text-left"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Vendor</Label>
+              <Select
+                value={form.vendorId || "none"}
+                onValueChange={(v) =>
+                  setForm({ ...form, vendorId: v === "none" ? "" : v })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No vendor" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No vendor</SelectItem>
+                  {vendors.map((v) => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.name}
+                      {v.companyName ? ` — ${v.companyName}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="flex items-center justify-between rounded-lg border p-3">

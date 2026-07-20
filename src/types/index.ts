@@ -13,6 +13,8 @@ export interface Product {
   barcodeType: string;
   categoryId: string | null;
   category?: Category | null;
+  vendorId: string | null;
+  vendor?: Vendor | null;
   costPrice: number;
   salePrice: number;
   wholesalePrice: number;
@@ -22,6 +24,7 @@ export interface Product {
   minStock: number;
   taxRate: number;
   expiryDate: string | null;
+  manufacturingDate: string | null;
   hasBarcode: boolean;
   image: string | null;
   active: boolean;
@@ -33,6 +36,18 @@ export interface Category {
   id: string;
   name: string;
   icon: string | null;
+}
+
+export interface Vendor {
+  id: string;
+  name: string;
+  companyName: string | null;
+  phone: string | null;
+  address: string | null;
+  note: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CartItem {
