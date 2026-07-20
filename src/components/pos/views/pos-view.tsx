@@ -216,14 +216,16 @@ export function PosView({ settings }: PosViewProps) {
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-32 rounded-xl bg-muted animate-pulse"
-                />
-              ))}
-            </div>
+            <ScrollArea className="h-[calc(100vh-280px)] pr-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="h-32 rounded-xl bg-muted animate-pulse"
+                  />
+                ))}
+              </div>
+            </ScrollArea>
           ) : products.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">
@@ -232,8 +234,9 @@ export function PosView({ settings }: PosViewProps) {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {products.map((p) => (
+            <ScrollArea className="h-[calc(100vh-280px)] pr-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {products.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => addToCart(p)}
@@ -272,7 +275,8 @@ export function PosView({ settings }: PosViewProps) {
                   </div>
                 </button>
               ))}
-            </div>
+              </div>
+            </ScrollArea>
           )}
         </div>
 
