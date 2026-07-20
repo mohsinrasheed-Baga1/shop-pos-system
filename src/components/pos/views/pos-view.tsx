@@ -241,9 +241,9 @@ export function PosView({ settings }: PosViewProps) {
                   key={p.id}
                   onClick={() => addToCart(p)}
                   disabled={!p.active}
-                  className="group text-left bg-card rounded-xl border p-3 hover:border-emerald-400 hover:shadow-md transition-all disabled:opacity-50"
+                  className="group text-left bg-card rounded-xl border p-2 hover:border-emerald-400 hover:shadow-md transition-all disabled:opacity-50"
                 >
-                  <div className="aspect-square rounded-lg bg-gradient-to-br from-emerald-50 to-amber-50 flex items-center justify-center mb-2 overflow-hidden">
+                  <div className="aspect-square rounded-lg bg-gradient-to-br from-emerald-50 to-amber-50 flex items-center justify-center mb-1.5 overflow-hidden">
                     {p.image ? (
                       <img
                         src={p.image}
@@ -251,10 +251,10 @@ export function PosView({ settings }: PosViewProps) {
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <Package className="w-8 h-8 text-emerald-600/50" />
+                      <Package className="w-6 h-6 text-emerald-600/50" />
                     )}
                   </div>
-                  <div className="font-medium text-sm line-clamp-2 min-h-[2.5rem]">
+                  <div className="font-medium text-xs line-clamp-2 min-h-[2rem] leading-tight">
                     {p.name}
                   </div>
                   <div className="flex items-center justify-between mt-1">

@@ -8,9 +8,11 @@ const {
   app,
   BrowserWindow,
   shell,
+  ipcMain,
 } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const http = require("http");
 const { spawn } = require("child_process");
 
@@ -24,10 +26,82 @@ const serverDir = isDev
 
 // Database lives in userData (writable, persists across versions)
 const userData = app.getPath("userData");
-const dbPath = path.join(userData, "pos.db");
+const localDbPath = path.join(userData, "pos.db");
 
-// Copy the template DB (shipped in resources) on first launch
-function ensureDatabase() {
+// Path to a small config file the Next.js API writes when the user changes
+// the multi-computer sharing mode in Settings. Read BEFORE ensureDatabase()
+// so we know which database file to actually use (local AppData vs. a
+// network share pointed to by another computer on the LAN).
+const SHARE_CONFIG_PATH = path.join(os.homedir(), ".shoppos-config.json");
+
+/**
+ * Read ~/.shoppos-config.json (if present) and return the stored sharing
+ * config. Returns null if the file does not exist or is malformed.
+ *
+ * Shape: { shareMode: "local" | "host" | "client", dbNetworkPath: string|null }
+ */
+function readShareConfig() {
+  try {
+    if (!fs.existsSync(SHARE_CONFIG_PATH)) return null;
+    const raw = fs.readFileSync(SHARE_CONFIG_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const mode = parsed.shareMode;
+    if (mode !== "local" && mode !== "host" && mode !== "client") return null;
+    return {
+      shareMode: mode,
+      dbNetworkPath:
+        typeof parsed.dbNetworkPath === "string" && parsed.dbNetworkPath
+          ? parsed.dbNetworkPath
+          : null,
+    };
+  } catch (e) {
+    console.warn("[POS] Could not read share config:", e?.message || e);
+    return null;
+  }
+}
+
+/**
+ * Decide which database path to use based on the share config:
+ *   - "client" mode with a network path → use the network .db file
+ *   - "host" or "local" (default)      → use the local AppData .db file
+ *
+ * Returns an object with the resolved path + a label for logging.
+ */
+function resolveDbPath() {
+  const cfg = readShareConfig();
+  if (cfg && cfg.shareMode === "client" && cfg.dbNetworkPath) {
+    console.log(
+      `[POS] Share config: client mode → using network DB at ${cfg.dbNetworkPath}`
+    );
+    return { dbPath: cfg.dbNetworkPath, mode: "client" };
+  }
+  if (cfg && cfg.shareMode === "host") {
+    console.log("[POS] Share config: host mode → using local DB (shared via folder)");
+    return { dbPath: localDbPath, mode: "host" };
+  }
+  if (cfg) {
+    console.log(`[POS] Share config: ${cfg.shareMode} → using local DB`);
+  }
+  return { dbPath: localDbPath, mode: "local" };
+}
+
+// Copy the template DB (shipped in resources) on first launch.
+// NOTE: when in client mode the DB lives on another computer, so we
+// must NOT seed a local file — the host is responsible for that.
+function ensureDatabase(dbPath, mode) {
+  if (mode === "client") {
+    // Don't try to create/copy a template file on the network share from
+    // the client side — the host owns that file. We only log.
+    if (fs.existsSync(dbPath)) {
+      console.log(`[POS] Using existing network database at ${dbPath}`);
+    } else {
+      console.warn(
+        `[POS] Network DB not found at ${dbPath}. Make sure the host computer is running and has shared the folder.`
+      );
+    }
+    return;
+  }
   if (!fs.existsSync(dbPath)) {
     const template = path.join(serverDir, "pos.db");
     try {
@@ -49,7 +123,8 @@ let mainWindow = null;
 let serverProcess = null;
 
 function startServer() {
-  ensureDatabase();
+  const { dbPath, mode } = resolveDbPath();
+  ensureDatabase(dbPath, mode);
 
   const serverJs = path.join(serverDir, "server.js");
   if (!fs.existsSync(serverJs)) {
@@ -162,6 +237,36 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  // Open a folder in the OS file explorer. Used by the Multi-Computer
+  // Sharing card so the user can reveal the local data folder and share it
+  // on the LAN. Falls back to opening the parent directory if the file
+  // does not exist yet.
+  ipcMain.handle("pos:open-path", async (_evt, p) => {
+    if (typeof p !== "string" || !p) {
+      return { ok: false, error: "Invalid path" };
+    }
+    try {
+      // If the path points to a file that doesn't exist yet, open its
+      // parent directory instead so the user can still see where it would
+      // live (e.g. the ShopPOS folder they need to share).
+      if (!fs.existsSync(p)) {
+        const dir = path.dirname(p);
+        if (fs.existsSync(dir)) {
+          await shell.openPath(dir);
+          return { ok: true, opened: dir };
+        }
+        return { ok: false, error: "Path does not exist" };
+      }
+      const result = await shell.openPath(p);
+      if (result) {
+        return { ok: false, error: result };
+      }
+      return { ok: true, opened: p };
+    } catch (e) {
+      return { ok: false, error: String(e?.message || e) };
+    }
+  });
+
   app.on("second-instance", () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();

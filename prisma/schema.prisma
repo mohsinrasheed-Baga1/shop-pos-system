@@ -188,6 +188,14 @@ model Settings {
   invoicePrefix String   @default("INV")
   printerWidth  Int      @default(58)
   backupPasswordHash String?
+  // Multi-computer sharing: "local" | "host" | "client"
+  shareMode     String   @default("local")
+  // When shareMode = "client", the network DB path (e.g. \\HOST\ShopPOS\pos.db)
+  dbNetworkPath String?
+  // Google Drive backup integration
+  googleClientId     String?
+  googleClientSecret String?
+  googleRefreshToken String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

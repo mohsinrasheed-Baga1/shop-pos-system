@@ -188,6 +188,11 @@ CREATE TABLE IF NOT EXISTS Settings (
   invoicePrefix TEXT NOT NULL DEFAULT 'INV',
   printerWidth INTEGER NOT NULL DEFAULT 58,
   backupPasswordHash TEXT,
+  shareMode TEXT NOT NULL DEFAULT 'local',
+  dbNetworkPath TEXT,
+  googleClientId TEXT,
+  googleClientSecret TEXT,
+  googleRefreshToken TEXT,
   createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updatedAt DATETIME NOT NULL
 );
@@ -211,6 +216,11 @@ const COLUMN_ADDITIONS: Record<string, [string, string][]> = {
     ["subName", "TEXT"],
     ["logo", "TEXT"],
     ["backupPasswordHash", "TEXT"],
+    ["shareMode", "TEXT NOT NULL DEFAULT 'local'"],
+    ["dbNetworkPath", "TEXT"],
+    ["googleClientId", "TEXT"],
+    ["googleClientSecret", "TEXT"],
+    ["googleRefreshToken", "TEXT"],
   ],
 };
 

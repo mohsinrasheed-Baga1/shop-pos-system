@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
 // Set or update the backup/restore password (admin only)
-// body: { action: "set"|"update"|"verify", password?, currentPassword? }
+// body: { action: "set"|"update"|"verify"|"generate"|"reset", password?, currentPassword?, loginPassword?, newPassword?, confirmPassword? }
 export async function POST(req: NextRequest) {
   const user = await getSessionUser();
   if (!user || user.role !== "ADMIN") {
@@ -47,6 +47,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Password must be at least 4 chars" }, { status: 400 });
     }
     const hash = await bcrypt.hash(body.password, 10);
+    await db.settings.upsert({
+      where: { id: "shop" },
+      update: { backupPasswordHash: hash },
+      create: { id: "shop", backupPasswordHash: hash },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  // Reset the backup password using the admin's LOGIN password as auth.
+  // body: { action: "reset", loginPassword, newPassword }
+  // This is the "forgot backup password" recovery path — it verifies the
+  // caller knows the admin login password, then sets a brand-new backup
+  // password (overwriting any previous hash).
+  if (action === "reset") {
+    if (!body.loginPassword) {
+      return NextResponse.json({ error: "Login password is required" }, { status: 400 });
+    }
+    if (!body.newPassword || body.newPassword.length < 4) {
+      return NextResponse.json(
+        { error: "New backup password must be at least 4 chars" },
+        { status: 400 }
+      );
+    }
+    if (body.newPassword !== body.confirmPassword) {
+      return NextResponse.json(
+        { error: "New backup passwords do not match" },
+        { status: 400 }
+      );
+    }
+    // Look up the admin user and verify the login password.
+    const admin = await db.user.findFirst({
+      where: { role: "ADMIN" },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!admin) {
+      return NextResponse.json({ error: "No admin account found" }, { status: 500 });
+    }
+    const loginOk = await bcrypt.compare(body.loginPassword, admin.password);
+    if (!loginOk) {
+      return NextResponse.json({ error: "Login password is incorrect" }, { status: 400 });
+    }
+    const hash = await bcrypt.hash(body.newPassword, 10);
     await db.settings.upsert({
       where: { id: "shop" },
       update: { backupPasswordHash: hash },

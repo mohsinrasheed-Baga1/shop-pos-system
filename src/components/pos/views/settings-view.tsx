@@ -37,6 +37,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import {
   Store,
@@ -63,9 +64,85 @@ import {
   ShieldCheck,
   RefreshCw,
   X,
+  Network,
+  Wifi,
+  Server,
+  Monitor,
+  Link2,
+  Unlink,
+  FolderOpen,
+  AlertTriangle,
+  CheckCircle2,
+  AlertCircle,
+  Cloud,
+  DownloadCloud,
+  ExternalLink,
+  Package,
 } from "lucide-react";
 import type { Settings } from "@/types";
 import { useAppStore } from "@/stores/use-pos-store";
+
+// ============================================================
+// In-app auto-update constants
+// ============================================================
+const CURRENT_VERSION = "2.5.0";
+const UPDATE_URL =
+  "https://raw.githubusercontent.com/mohsinrasheed-Baga1/shop-pos-system/main/public/update.json";
+// The installer is split into 11 parts (~20 MB each) on the repo dist/ folder.
+const PART_BASE_URL =
+  "https://raw.githubusercontent.com/mohsinrasheed-Baga1/shop-pos-system/main/dist/part_";
+const PARTS_COUNT = 11;
+
+interface UpdateInfo {
+  version: string;
+  releaseUrl?: string;
+  changelog?: string[];
+}
+
+/** Compare semantic versions. Returns true if remote > current. */
+function isNewerVersion(remote: string, current: string): boolean {
+  const parse = (v: string) =>
+    v
+      .split(".")
+      .map((x) => parseInt(x.replace(/\D/g, "") || "0", 10))
+      .slice(0, 3);
+  const r = parse(remote);
+  const c = parse(current);
+  for (let i = 0; i < 3; i++) {
+    const ri = r[i] || 0;
+    const ci = c[i] || 0;
+    if (ri > ci) return true;
+    if (ri < ci) return false;
+  }
+  return false;
+}
+
+/**
+ * Download a single file part with streaming progress.
+ * Resolves to an array of Uint8Array chunks (combined later).
+ */
+async function downloadPartStreaming(
+  url: string,
+  onProgress: (received: number, total: number) => void
+): Promise<Uint8Array[]> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  if (!res.body) throw new Error("No response body for streaming download");
+  const total = parseInt(res.headers.get("Content-Length") || "0", 10);
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      chunks.push(value);
+      received += value.length;
+      onProgress(received, total);
+    }
+  }
+  return chunks;
+}
 
 interface BackupFile {
   name: string;
@@ -185,6 +262,9 @@ export function SettingsView() {
         receiptFooter: pick("receiptFooter"),
         invoicePrefix: pick("invoicePrefix"),
         printerWidth: pick("printerWidth"),
+        googleClientId: pick("googleClientId"),
+        googleClientSecret: pick("googleClientSecret"),
+        googleRefreshToken: pick("googleRefreshToken"),
       };
       const res = await fetch("/api/settings", {
         method: "PUT",
@@ -286,7 +366,16 @@ export function SettingsView() {
       {/* 7. Backup & Restore card */}
       <BackupRestoreCard />
 
-      {/* 8. Barcode Scanner card */}
+      {/* 8. Multi-Computer Sharing card */}
+      <MultiComputerSharingCard settings={settings} onSaved={reload} />
+
+      {/* 9. Software Updates card */}
+      <SoftwareUpdatesCard />
+
+      {/* 10. Google Drive Backup card */}
+      <GoogleDriveCard settings={settings} onSave={savePartial} />
+
+      {/* 11. Barcode Scanner card */}
       <ScannerCard />
     </div>
   );
@@ -1118,6 +1207,27 @@ function BackupPasswordCard({ settings, onSaved }: BackupPasswordCardProps) {
   const [saving, setSaving] = React.useState(false);
   const [generating, setGenerating] = React.useState(false);
 
+  // Reset (forgot-password) dialog state — uses admin login password.
+  const [resetOpen, setResetOpen] = React.useState(false);
+  const [resetLogin, setResetLogin] = React.useState("");
+  const [resetNew, setResetNew] = React.useState("");
+  const [resetConfirm, setResetConfirm] = React.useState("");
+  const [resetting, setResetting] = React.useState(false);
+
+  const resetNewError =
+    resetNew.length > 0 && resetNew.length < 4
+      ? "Password must be at least 4 characters"
+      : "";
+  const resetConfirmError =
+    resetConfirm.length > 0 && resetNew !== resetConfirm
+      ? "Passwords do not match"
+      : "";
+  const canReset =
+    resetLogin.length > 0 &&
+    resetNew.length >= 4 &&
+    resetNew === resetConfirm &&
+    !resetting;
+
   const newPasswordError =
     newPassword.length > 0 && newPassword.length < 4
       ? "Password must be at least 4 characters"
@@ -1209,6 +1319,51 @@ function BackupPasswordCard({ settings, onSaved }: BackupPasswordCardProps) {
       .writeText(generated)
       .then(() => toast.success("Copied to clipboard"))
       .catch(() => toast.error("Copy failed"));
+  }
+
+  // Reset the backup password using the admin login password as auth.
+  // Calls POST /api/settings/backup-password with action: "reset".
+  async function onReset() {
+    if (resetting || !canReset) return;
+    setResetting(true);
+    try {
+      const res = await fetch("/api/settings/backup-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reset",
+          loginPassword: resetLogin,
+          newPassword: resetNew,
+          confirmPassword: resetConfirm,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Reset failed");
+      }
+      toast.success("Backup password reset successfully");
+      setResetLogin("");
+      setResetNew("");
+      setResetConfirm("");
+      setResetOpen(false);
+      setMode("idle");
+      await onSaved();
+    } catch (err: any) {
+      toast.error(err?.message || "Could not reset password");
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  function closeResetDialog(open: boolean) {
+    if (!open && !resetting) {
+      setResetOpen(false);
+      setResetLogin("");
+      setResetNew("");
+      setResetConfirm("");
+    } else if (open) {
+      setResetOpen(true);
+    }
   }
 
   return (
@@ -1432,6 +1587,135 @@ function BackupPasswordCard({ settings, onSaved }: BackupPasswordCardProps) {
             </div>
           </form>
         )}
+
+        {/* Forgot backup password — reset using admin login password */}
+        <Separator />
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 rounded-lg border border-amber-200 dark:border-amber-900/40 bg-amber-50/40 dark:bg-amber-950/10 p-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                Forgot your backup password?
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                You can reset it using your admin login password. This is useful
+                if you have forgotten the current backup password and need to
+                regain access to backup/restore operations.
+              </p>
+            </div>
+          </div>
+          <Dialog open={resetOpen} onOpenChange={closeResetDialog}>
+            <DialogTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Reset Backup Password
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Reset Backup Password</DialogTitle>
+                <DialogDescription>
+                  Enter your admin login password to verify your identity, then
+                  set a new backup password. The login password is never stored
+                  — it is only used to verify that you are the admin.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="resetLogin"
+                    className="flex items-center gap-1.5"
+                  >
+                    <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                    Login Password
+                  </Label>
+                  <Input
+                    id="resetLogin"
+                    type="password"
+                    value={resetLogin}
+                    onChange={(e) => setResetLogin(e.target.value)}
+                    placeholder="Enter your admin login password"
+                    dir="ltr"
+                    className="h-11"
+                    autoComplete="current-password"
+                  />
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="resetNew"
+                    className="flex items-center gap-1.5"
+                  >
+                    <Key className="w-3.5 h-3.5 text-emerald-600" />
+                    New Backup Password
+                  </Label>
+                  <Input
+                    id="resetNew"
+                    type="password"
+                    value={resetNew}
+                    onChange={(e) => setResetNew(e.target.value)}
+                    placeholder="At least 4 characters"
+                    dir="ltr"
+                    className="h-11"
+                    autoComplete="new-password"
+                  />
+                  {resetNewError && (
+                    <p className="text-xs text-red-600">{resetNewError}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label
+                    htmlFor="resetConfirm"
+                    className="flex items-center gap-1.5"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    Confirm New Backup Password
+                  </Label>
+                  <Input
+                    id="resetConfirm"
+                    type="password"
+                    value={resetConfirm}
+                    onChange={(e) => setResetConfirm(e.target.value)}
+                    placeholder="Re-type new backup password"
+                    dir="ltr"
+                    className="h-11"
+                    autoComplete="new-password"
+                  />
+                  {resetConfirmError && (
+                    <p className="text-xs text-red-600">{resetConfirmError}</p>
+                  )}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => closeResetDialog(false)}
+                  disabled={resetting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={onReset}
+                  disabled={!canReset}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {resetting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4" />
+                  )}
+                  Reset Password
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </CardContent>
     </Card>
   );
@@ -1910,7 +2194,7 @@ function BackupRestoreCard() {
 }
 
 // ============================================================
-// 8. Barcode Scanner card
+// 9. Barcode Scanner card
 // ============================================================
 function ScannerCard() {
   const setView = useAppStore((s) => s.setView);
@@ -1941,6 +2225,1227 @@ function ScannerCard() {
             Open Scanner
           </Button>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================
+// 8. Multi-Computer Sharing card
+// ============================================================
+interface MultiComputerSharingCardProps {
+  settings: Settings;
+  onSaved: () => Promise<void>;
+}
+
+/**
+ * Multi-computer sharing card.
+ *
+ * Lets the user run the POS on multiple computers connected via WiFi/LAN
+ * sharing the SAME SQLite database:
+ *   - Host Mode   → this computer hosts the DB; share its data folder
+ *   - Client Mode → connect to a host's shared DB over the network
+ *   - Standalone  → use the local DB only (default)
+ *
+ * Settings (shareMode, dbNetworkPath) are persisted both in the Settings
+ * table AND in ~/.shoppos-config.json — the Electron main process reads
+ * the latter at startup to decide which DB file to bind to.
+ */
+function MultiComputerSharingCard({
+  settings,
+  onSaved,
+}: MultiComputerSharingCardProps) {
+  const [hostName, setHostName] = React.useState<string>("");
+  const [localDbPath, setLocalDbPath] = React.useState<string | null>(null);
+  const [clientPath, setClientPath] = React.useState<string>("");
+  const [testing, setTesting] = React.useState(false);
+  const [connecting, setConnecting] = React.useState(false);
+  const [hosting, setHosting] = React.useState(false);
+  const [disconnecting, setDisconnecting] = React.useState(false);
+
+  const shareMode: string = settings.shareMode || "local";
+  const dbNetworkPath: string | null = settings.dbNetworkPath ?? null;
+
+  // Fetch the local hostname + local DB path so the UI can show the user
+  // the expected network path they need to share with other computers and
+  // let them reveal the data folder in the OS file explorer.
+  React.useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/settings/share", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!active) return;
+        if (typeof data.hostname === "string") setHostName(data.hostname);
+        if (typeof data.localDbPath === "string" && data.localDbPath) {
+          setLocalDbPath(data.localDbPath);
+        }
+      } catch {
+        // hostname is best-effort; ignore failures
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // When entering client mode for the first time, prefill the path field with
+  // the saved network path (if any) so the user can re-test/re-connect.
+  React.useEffect(() => {
+    if (shareMode === "client" && dbNetworkPath && !clientPath) {
+      setClientPath(dbNetworkPath);
+    }
+  }, [shareMode, dbNetworkPath, clientPath]);
+
+  const expectedNetworkPath = hostName
+    ? `\\\\${hostName}\\ShopPOS\\pos.db`
+    : "\\\\<this-computer-name>\\ShopPOS\\pos.db";
+
+  // The folder containing the local DB — revealed in the OS file explorer
+  // when the user clicks "Open Data Folder" so they can share it on the LAN.
+  const dataFolderPath = localDbPath || null;
+
+  async function onEnableHost() {
+    if (hosting) return;
+    setHosting(true);
+    try {
+      const res = await fetch("/api/settings/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shareMode: "host" }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Failed");
+      }
+      toast.success("Host mode enabled");
+      await onSaved();
+    } catch (err: any) {
+      toast.error(err?.message || "Could not enable host mode");
+    } finally {
+      setHosting(false);
+    }
+  }
+
+  async function onTestConnection() {
+    if (testing) return;
+    const p = clientPath.trim();
+    if (!p) {
+      toast.error("Enter a host computer path first");
+      return;
+    }
+    setTesting(true);
+    try {
+      const res = await fetch("/api/settings/test-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: p }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        const msg = data?.error || "Connection failed";
+        toast.error(msg);
+        return;
+      }
+      if (data.exists === false) {
+        toast.success(
+          "Reachable! The DB file does not exist yet — it will be created when the host shares it."
+        );
+      } else if (data.type === "dir") {
+        toast.success(
+          "Folder is reachable. Provide the full path to the .db file to connect."
+        );
+      } else {
+        toast.success(
+          `Connection OK — file is reachable${data.size != null ? ` (${data.size} bytes)` : ""}`
+        );
+      }
+    } catch (err: any) {
+      toast.error(err?.message || "Connection failed");
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  async function onConnect() {
+    if (connecting) return;
+    const p = clientPath.trim();
+    if (!p) {
+      toast.error("Enter a host computer path first");
+      return;
+    }
+    setConnecting(true);
+    try {
+      const res = await fetch("/api/settings/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shareMode: "client",
+          dbNetworkPath: p,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Failed");
+      }
+      toast.success(
+        "Connected to host. Please restart the app to switch to the shared database."
+      );
+      await onSaved();
+    } catch (err: any) {
+      toast.error(err?.message || "Could not connect");
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function onDisconnect() {
+    if (disconnecting) return;
+    setDisconnecting(true);
+    try {
+      const res = await fetch("/api/settings/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shareMode: "local" }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Failed");
+      }
+      toast.success(
+        "Disconnected. Please restart the app to use the local database again."
+      );
+      await onSaved();
+    } catch (err: any) {
+      toast.error(err?.message || "Could not disconnect");
+    } finally {
+      setDisconnecting(false);
+    }
+  }
+
+  async function onOpenDataFolder() {
+    // Best effort — uses the Electron preload bridge if available.
+    const electron = (window as Window).posElectron;
+    if (!dataFolderPath) {
+      toast.info(
+        "Data folder path is not available. Run the app in desktop mode to open it."
+      );
+      return;
+    }
+    if (!electron?.openPath) {
+      toast.info("Open the data folder manually: " + dataFolderPath);
+      return;
+    }
+    try {
+      const result = await electron.openPath(dataFolderPath);
+      if (!result?.ok) {
+        toast.error(result?.error || "Could not open folder");
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Could not open folder");
+    }
+  }
+
+  function copyToClipboard(text: string) {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => toast.success("Copied to clipboard"))
+      .catch(() => toast.error("Copy failed"));
+  }
+
+  // Status badge (top-right)
+  const statusBadge =
+    shareMode === "host" ? (
+      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+        <Server className="w-3 h-3 mr-1" />
+        Host Mode Active
+      </Badge>
+    ) : shareMode === "client" ? (
+      <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+        <Link2 className="w-3 h-3 mr-1" />
+        Client Mode Active
+      </Badge>
+    ) : (
+      <Badge variant="outline" className="text-muted-foreground">
+        <Monitor className="w-3 h-3 mr-1" />
+        Standalone
+      </Badge>
+    );
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Network className="w-5 h-5 text-emerald-600" />
+              Multi-Computer Sharing
+            </CardTitle>
+            <CardDescription>
+              Use this POS on multiple computers over WiFi/LAN — share the same
+              database across all of them.
+            </CardDescription>
+          </div>
+          {statusBadge}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {/* Current status summary */}
+        <div className="rounded-lg border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/10 p-3 space-y-1.5">
+          {shareMode === "host" ? (
+            <>
+              <div className="flex items-center gap-2 text-sm">
+                <Server className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-medium text-emerald-800 dark:text-emerald-300">
+                  Host Mode Active
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground pl-6">
+                Your database is shared. Other computers on your network can
+                connect to it.
+              </p>
+              <div className="flex items-center gap-2 pl-6 pt-1">
+                <code className="font-mono text-xs bg-background px-2 py-1 rounded border break-all">
+                  {expectedNetworkPath}
+                </code>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2"
+                  onClick={() => copyToClipboard(expectedNetworkPath)}
+                >
+                  Copy
+                </Button>
+              </div>
+            </>
+          ) : shareMode === "client" ? (
+            <>
+              <div className="flex items-center gap-2 text-sm">
+                <Link2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-medium text-emerald-800 dark:text-emerald-300">
+                  Connected to:
+                </span>
+                <code className="font-mono text-xs bg-background px-2 py-1 rounded border break-all">
+                  {dbNetworkPath || "(no path)"}
+                </code>
+              </div>
+              <div className="pl-6 pt-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-amber-300 text-amber-700 hover:bg-amber-50"
+                  onClick={onDisconnect}
+                  disabled={disconnecting}
+                >
+                  {disconnecting ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Unlink className="w-3.5 h-3.5" />
+                  )}
+                  Disconnect
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 text-sm">
+              <Monitor className="w-4 h-4 text-muted-foreground shrink-0" />
+              <span className="font-medium">
+                Standalone (local database)
+              </span>
+            </div>
+          )}
+        </div>
+
+        <Separator />
+
+        {/* Host mode section */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+              <Server className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Host Mode</h3>
+              <p className="text-xs text-muted-foreground">
+                This computer hosts the shared database.
+              </p>
+            </div>
+          </div>
+
+          {shareMode === "host" ? (
+            <div className="space-y-3 rounded-lg border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/40 dark:bg-emerald-950/20 p-3">
+              <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal pl-4">
+                <li>
+                  Your data folder is now shared. Other computers on your
+                  network can connect.
+                </li>
+                <li>
+                  Share the folder containing your data on your network:
+                  Right-click the folder → <span className="font-medium">Properties → Sharing → Advanced Sharing</span>.
+                </li>
+                <li>
+                  Give other computers the network path below to connect as
+                  clients.
+                </li>
+              </ol>
+              <div className="space-y-1.5">
+                <Label className="text-xs flex items-center gap-1.5">
+                  <Wifi className="w-3 h-3 text-emerald-600" />
+                  Network path for clients
+                </Label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <code className="font-mono text-xs bg-background px-2 py-1.5 rounded border break-all flex-1 min-w-[200px]">
+                    {expectedNetworkPath}
+                  </code>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8"
+                    onClick={() => copyToClipboard(expectedNetworkPath)}
+                  >
+                    Copy
+                  </Button>
+                </div>
+                {hostName && (
+                  <p className="text-xs text-muted-foreground">
+                    This computer&apos;s name: <span className="font-mono">{hostName}</span>
+                  </p>
+                )}
+                {dataFolderPath && (
+                  <p className="text-xs text-muted-foreground break-all">
+                    Local data file:{" "}
+                    <span className="font-mono">{dataFolderPath}</span>
+                  </p>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-9 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                onClick={onOpenDataFolder}
+                disabled={!dataFolderPath}
+              >
+                <FolderOpen className="w-4 h-4" />
+                Open Data Folder
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              onClick={onEnableHost}
+              disabled={hosting || shareMode === "client"}
+              className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {hosting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Server className="w-4 h-4" />
+              )}
+              Enable Host Mode
+            </Button>
+          )}
+        </div>
+
+        <Separator />
+
+        {/* Client mode section */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+              <Link2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">Client Mode</h3>
+              <p className="text-xs text-muted-foreground">
+                Connect to a host computer&apos;s shared database.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="dbNetworkPath" className="flex items-center gap-1.5">
+              <Monitor className="w-3.5 h-3.5 text-emerald-600" />
+              Host computer path
+            </Label>
+            <Input
+              id="dbNetworkPath"
+              value={clientPath}
+              onChange={(e) => setClientPath(e.target.value)}
+              placeholder="\\DESKTOP-ABC\ShopPOS\pos.db"
+              dir="ltr"
+              className="h-11 font-mono text-sm"
+              disabled={shareMode === "host"}
+            />
+            <p className="text-xs text-muted-foreground">
+              Ask the host computer for this path. It points to the shared
+              <span className="font-mono"> pos.db </span>file.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+              onClick={onTestConnection}
+              disabled={testing || !clientPath.trim() || shareMode === "host"}
+            >
+              {testing ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Wifi className="w-4 h-4" />
+              )}
+              Test Connection
+            </Button>
+            <Button
+              type="button"
+              onClick={onConnect}
+              disabled={
+                connecting ||
+                !clientPath.trim() ||
+                shareMode === "host"
+              }
+              className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {connecting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Link2 className="w-4 h-4" />
+              )}
+              Connect
+            </Button>
+          </div>
+        </div>
+
+        {/* Warning alert */}
+        <Alert className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
+          <AlertTriangle className="w-4 h-4 text-amber-700" />
+          <AlertTitle className="text-amber-800 dark:text-amber-300">
+            Important
+          </AlertTitle>
+          <AlertDescription className="text-xs">
+            When using Client Mode, make sure the host computer is running and
+            the folder is shared. The database will be read from the network
+            path — if the host is offline, this computer will not be able to
+            access its data. <span className="font-medium">Restart the app after switching modes for the change to take effect.</span>
+          </AlertDescription>
+        </Alert>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================
+// 9. Software Updates card (in-app auto-update)
+// ============================================================
+type SoftwareUpdateStatus =
+  | "idle"
+  | "checking"
+  | "up-to-date"
+  | "available"
+  | "downloading"
+  | "downloaded"
+  | "error";
+
+function SoftwareUpdatesCard() {
+  const [status, setStatus] = React.useState<SoftwareUpdateStatus>("idle");
+  const [updateInfo, setUpdateInfo] = React.useState<UpdateInfo | null>(null);
+  const [progress, setProgress] = React.useState(0);
+  const [partLabel, setPartLabel] = React.useState("");
+  const [blobUrl, setBlobUrl] = React.useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = React.useState<string>("");
+
+  // Revoke the object URL when it's no longer needed (component unmount or
+  // new download).
+  React.useEffect(() => {
+    return () => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [blobUrl]);
+
+  async function checkForUpdates() {
+    setStatus("checking");
+    setUpdateInfo(null);
+    setErrorMsg("");
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+      setBlobUrl(null);
+    }
+    try {
+      const res = await fetch(UPDATE_URL, { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to fetch update info");
+      const data = (await res.json()) as UpdateInfo;
+      if (data?.version && isNewerVersion(data.version, CURRENT_VERSION)) {
+        setUpdateInfo(data);
+        setStatus("available");
+        toast.success(`Version v${data.version} is available!`);
+      } else {
+        setStatus("up-to-date");
+      }
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Failed to check for updates");
+      setStatus("error");
+    }
+  }
+
+  function triggerDownload(url: string, fileName: string) {
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  async function downloadAndInstall() {
+    setStatus("downloading");
+    setProgress(0);
+    setErrorMsg("");
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+      setBlobUrl(null);
+    }
+    try {
+      const allChunks: Uint8Array[] = [];
+      for (let i = 0; i < PARTS_COUNT; i++) {
+        const partIdx = String(i).padStart(2, "0");
+        const url = `${PART_BASE_URL}${partIdx}`;
+        setPartLabel(`Downloading part ${i + 1}/${PARTS_COUNT}...`);
+        const chunks = await downloadPartStreaming(url, (received, total) => {
+          // Approximate overall progress across all 11 parts:
+          //   pct = ((i + received/total) / PARTS_COUNT) * 100
+          let pct: number;
+          if (total > 0) {
+            pct = ((i + received / total) / PARTS_COUNT) * 100;
+          } else {
+            pct = (i / PARTS_COUNT) * 100;
+          }
+          setProgress(Math.min(100, Math.round(pct)));
+        });
+        for (const c of chunks) allChunks.push(c);
+        // After part completes, bump progress to (i+1)/PARTS_COUNT.
+        setProgress(Math.round(((i + 1) / PARTS_COUNT) * 100));
+      }
+
+      // Combine all parts into one Blob and trigger the .exe download.
+      // Browsers cannot directly execute downloaded binaries, so we hand
+      // the combined blob to the user via an <a download> click — they run
+      // the installer manually.
+      const blob = new Blob(allChunks as BlobPart[], {
+        type: "application/octet-stream",
+      });
+      const url = URL.createObjectURL(blob);
+      setBlobUrl(url);
+      const fileName = `Shop-POS-System-Setup-${
+        updateInfo?.version || CURRENT_VERSION
+      }.exe`;
+      triggerDownload(url, fileName);
+      setStatus("downloaded");
+      setPartLabel("");
+      toast.success("Download complete! Installer saved to your Downloads folder.");
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Download failed");
+      setStatus("error");
+      toast.error(err?.message || "Download failed");
+    }
+  }
+
+  function openInstaller() {
+    if (!blobUrl) {
+      toast.error("Installer not available. Please download again.");
+      return;
+    }
+    const fileName = `Shop-POS-System-Setup-${
+      updateInfo?.version || CURRENT_VERSION
+    }.exe`;
+    triggerDownload(blobUrl, fileName);
+  }
+
+  function reset() {
+    setStatus("idle");
+    setUpdateInfo(null);
+    setProgress(0);
+    setPartLabel("");
+    setErrorMsg("");
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+      setBlobUrl(null);
+    }
+  }
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <DownloadCloud className="w-5 h-5 text-emerald-600" />
+              Software Updates
+            </CardTitle>
+            <CardDescription>
+              Check for new versions and download/install updates directly
+              within the app.
+            </CardDescription>
+          </div>
+          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+            <Package className="w-3 h-3 mr-1" />
+            Current Version: v{CURRENT_VERSION}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Idle: show Check for Updates button */}
+        {status === "idle" && (
+          <>
+            <p className="text-sm text-muted-foreground">
+              You are currently running{" "}
+              <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                v{CURRENT_VERSION}
+              </span>
+              . Click below to check for newer versions.
+            </p>
+            <Button
+              type="button"
+              onClick={checkForUpdates}
+              className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Check for Updates
+            </Button>
+          </>
+        )}
+
+        {/* Checking: spinner */}
+        {status === "checking" && (
+          <Alert className="border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20">
+            <Loader2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400 animate-spin" />
+            <AlertTitle className="text-emerald-800 dark:text-emerald-300">
+              Checking for updates...
+            </AlertTitle>
+            <AlertDescription className="text-xs">
+              Contacting the update server. This should only take a moment.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Up-to-date */}
+        {status === "up-to-date" && (
+          <>
+            <Alert className="border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20">
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+              <AlertTitle className="text-emerald-800 dark:text-emerald-300">
+                You&apos;re running the latest version.
+              </AlertTitle>
+              <AlertDescription className="text-xs">
+                Your current version (v{CURRENT_VERSION}) is up to date. Check
+                again later for new releases.
+              </AlertDescription>
+            </Alert>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={checkForUpdates}
+              className="h-10 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Check Again
+            </Button>
+          </>
+        )}
+
+        {/* Available: show version + changelog + Download button */}
+        {status === "available" && updateInfo && (
+          <>
+            <Alert className="border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30">
+              <DownloadCloud className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+              <AlertTitle className="text-emerald-800 dark:text-emerald-300">
+                Version v{updateInfo.version} is available!
+              </AlertTitle>
+              <AlertDescription>
+                <p className="text-xs mt-1">
+                  A new version is ready to download. New features, bug fixes
+                  and improvements are included.
+                </p>
+                {updateInfo.changelog && updateInfo.changelog.length > 0 && (
+                  <ul className="mt-3 space-y-1 text-xs list-disc pl-5">
+                    {updateInfo.changelog.map((line, idx) => (
+                      <li key={idx}>{line}</li>
+                    ))}
+                  </ul>
+                )}
+              </AlertDescription>
+            </Alert>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={downloadAndInstall}
+                className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white min-w-[220px]"
+              >
+                <DownloadCloud className="w-4 h-4" />
+                Download &amp; Install Update
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={checkForUpdates}
+                className="h-11 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Re-check
+              </Button>
+            </div>
+            {updateInfo.releaseUrl && (
+              <p className="text-xs">
+                <a
+                  href={updateInfo.releaseUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 hover:underline"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  View release notes on GitHub
+                </a>
+              </p>
+            )}
+          </>
+        )}
+
+        {/* Downloading */}
+        {status === "downloading" && (
+          <div className="space-y-3">
+            <Alert className="border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20">
+              <DownloadCloud className="w-4 h-4 text-emerald-700 dark:text-emerald-400 animate-pulse" />
+              <AlertTitle className="text-emerald-800 dark:text-emerald-300">
+                Downloading update...
+              </AlertTitle>
+              <AlertDescription className="text-xs">
+                {partLabel || "Starting download..."} {progress}%
+              </AlertDescription>
+            </Alert>
+            <div className="space-y-1.5">
+              <Progress
+                value={progress}
+                className="h-3 bg-emerald-100 dark:bg-emerald-950/40"
+              />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{partLabel || "Preparing..."}</span>
+                <span>{progress}%</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The installer is split into {PARTS_COUNT} parts (~20 MB each).
+              Please keep this window open until the download completes.
+            </p>
+          </div>
+        )}
+
+        {/* Downloaded */}
+        {status === "downloaded" && (
+          <div className="space-y-3">
+            <Alert className="border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30">
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+              <AlertTitle className="text-emerald-800 dark:text-emerald-300">
+                Download complete!
+              </AlertTitle>
+              <AlertDescription className="text-xs">
+                The installer has been saved to your Downloads folder. Click
+                below to install.
+                <br />
+                <span className="text-muted-foreground mt-1 inline-block">
+                  Note: Your browser may ask where to save the file. After it
+                  downloads, run the installer to update.
+                </span>
+              </AlertDescription>
+            </Alert>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={openInstaller}
+                className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white min-w-[180px]"
+              >
+                <Package className="w-4 h-4" />
+                Open Installer
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={reset}
+                className="h-11 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+              >
+                Done
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              After installing, your data is preserved. The new version will
+              replace this one.
+            </p>
+          </div>
+        )}
+
+        {/* Error */}
+        {status === "error" && (
+          <div className="space-y-3">
+            <Alert className="border-red-300 bg-red-50 dark:bg-red-950/20">
+              <AlertCircle className="w-4 h-4 text-red-700 dark:text-red-400" />
+              <AlertTitle className="text-red-800 dark:text-red-300">
+                Update check failed
+              </AlertTitle>
+              <AlertDescription className="text-xs">
+                {errorMsg ||
+                  "Could not check for updates. Please try again later."}
+              </AlertDescription>
+            </Alert>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={checkForUpdates}
+              className="h-10 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Try Again
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================
+// 10. Google Drive Backup card
+// ============================================================
+interface GoogleDriveCardProps {
+  settings: Settings;
+  onSave: (partial: Partial<Settings>) => Promise<Settings>;
+}
+
+function GoogleDriveCard({ settings, onSave }: GoogleDriveCardProps) {
+  const isConnected = !!(
+    settings.googleClientId &&
+    settings.googleClientSecret &&
+    settings.googleRefreshToken
+  );
+  const [form, setForm] = React.useState({
+    googleClientId: settings.googleClientId ?? "",
+    googleClientSecret: settings.googleClientSecret ?? "",
+    googleRefreshToken: settings.googleRefreshToken ?? "",
+  });
+  const [saving, setSaving] = React.useState(false);
+  const [backing, setBacking] = React.useState(false);
+  const [showSecrets, setShowSecrets] = React.useState(false);
+
+  React.useEffect(() => {
+    setForm({
+      googleClientId: settings.googleClientId ?? "",
+      googleClientSecret: settings.googleClientSecret ?? "",
+      googleRefreshToken: settings.googleRefreshToken ?? "",
+    });
+  }, [settings]);
+
+  const dirty =
+    form.googleClientId !== (settings.googleClientId ?? "") ||
+    form.googleClientSecret !== (settings.googleClientSecret ?? "") ||
+    form.googleRefreshToken !== (settings.googleRefreshToken ?? "");
+
+  async function onSaveToken(e: React.FormEvent) {
+    e.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSave({
+        googleClientId: form.googleClientId.trim(),
+        googleClientSecret: form.googleClientSecret.trim(),
+        googleRefreshToken: form.googleRefreshToken.trim(),
+      });
+      toast.success("Google Drive credentials saved");
+    } catch (err: any) {
+      toast.error(err?.message || "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onDisconnect() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSave({
+        googleClientId: "",
+        googleClientSecret: "",
+        googleRefreshToken: "",
+      });
+      setForm({
+        googleClientId: "",
+        googleClientSecret: "",
+        googleRefreshToken: "",
+      });
+      toast.success("Google Drive disconnected");
+    } catch (err: any) {
+      toast.error(err?.message || "Disconnect failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function onBackupNow() {
+    if (backing) return;
+    setBacking(true);
+    try {
+      const res = await fetch("/api/backup/google-drive", { method: "POST" });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(data?.error || "Backup failed");
+      }
+      toast.success(
+        `Backup uploaded to Google Drive${
+          data?.fileName ? `: ${data.fileName}` : ""
+        }`
+      );
+    } catch (err: any) {
+      toast.error(err?.message || "Backup failed");
+    } finally {
+      setBacking(false);
+    }
+  }
+
+  return (
+    <Card className="shadow-sm">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Cloud className="w-5 h-5 text-emerald-600" />
+              Google Drive Backup
+            </CardTitle>
+            <CardDescription>
+              Connect your Google account to automatically back up your data
+              to Google Drive.
+            </CardDescription>
+          </div>
+          {isConnected ? (
+            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+              <CheckCircle2 className="w-3 h-3 mr-1" />
+              Google Drive: Connected
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">
+              <Cloud className="w-3 h-3 mr-1" />
+              Not Connected
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* If connected: show connected state */}
+        {isConnected ? (
+          <Alert className="border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20">
+            <Cloud className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+            <AlertTitle className="text-emerald-800 dark:text-emerald-300">
+              Google Drive is connected
+            </AlertTitle>
+            <AlertDescription className="text-xs">
+              Your backup credentials are saved. Click &quot;Backup to Drive
+              Now&quot; below to upload the current database to your Google
+              Drive as a timestamped file.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">
+              To enable Google Drive backups, set up an OAuth 2.0 Client ID in
+              Google Cloud Console, then paste your credentials below.
+            </p>
+            <Alert className="border-emerald-100 bg-emerald-50/30 dark:bg-emerald-950/10">
+              <Cloud className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+              <AlertTitle className="text-sm text-emerald-800 dark:text-emerald-300">
+                Setup Instructions
+              </AlertTitle>
+              <AlertDescription>
+                <ol className="mt-2 space-y-1 text-xs list-decimal pl-4">
+                  <li>
+                    Go to{" "}
+                    <span className="font-medium">
+                      Google Cloud Console
+                    </span>{" "}
+                    → APIs &amp; Services → Credentials
+                  </li>
+                  <li>
+                    Create an{" "}
+                    <span className="font-medium">
+                      OAuth 2.0 Client ID
+                    </span>{" "}
+                    (type: Desktop app)
+                  </li>
+                  <li>Download the credentials JSON</li>
+                  <li>
+                    Get your{" "}
+                    <span className="font-medium">Refresh Token</span> (run the
+                    OAuth flow once)
+                  </li>
+                </ol>
+              </AlertDescription>
+            </Alert>
+          </>
+        )}
+
+        <form onSubmit={onSaveToken} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-2">
+              <Label
+                htmlFor="googleClientId"
+                className="flex items-center gap-1.5"
+              >
+                <Key className="w-3.5 h-3.5 text-emerald-600" />
+                Google Client ID
+              </Label>
+              <Input
+                id="googleClientId"
+                type={showSecrets ? "text" : "password"}
+                value={form.googleClientId}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, googleClientId: e.target.value }))
+                }
+                placeholder="xxxxx.apps.googleusercontent.com"
+                dir="ltr"
+                className="h-11 font-mono text-sm"
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label
+                htmlFor="googleClientSecret"
+                className="flex items-center gap-1.5"
+              >
+                <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                Google Client Secret
+              </Label>
+              <Input
+                id="googleClientSecret"
+                type={showSecrets ? "text" : "password"}
+                value={form.googleClientSecret}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    googleClientSecret: e.target.value,
+                  }))
+                }
+                placeholder="GOCSPX-xxxxxxx"
+                dir="ltr"
+                className="h-11 font-mono text-sm"
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label
+                htmlFor="googleRefreshToken"
+                className="flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
+                Google Refresh Token
+              </Label>
+              <Input
+                id="googleRefreshToken"
+                type={showSecrets ? "text" : "password"}
+                value={form.googleRefreshToken}
+                onChange={(e) =>
+                  setForm((p) => ({
+                    ...p,
+                    googleRefreshToken: e.target.value,
+                  }))
+                }
+                placeholder="1//xxxxxxx..."
+                dir="ltr"
+                className="h-11 font-mono text-sm"
+                autoComplete="off"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8"
+                onClick={() => setShowSecrets((v) => !v)}
+              >
+                {showSecrets ? "Hide" : "Show"} secrets
+              </Button>
+            </div>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            Your refresh token is stored encrypted locally. We only use it to
+            upload backups to your Drive.
+          </p>
+
+          <div className="flex flex-wrap justify-end gap-2">
+            {isConnected && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onDisconnect}
+                disabled={saving}
+                className="h-10 text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
+              >
+                <X className="w-4 h-4" />
+                Disconnect
+              </Button>
+            )}
+            <Button
+              type="submit"
+              disabled={saving || (!dirty && !isConnected)}
+              className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+            >
+              {saving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              Save Credentials
+            </Button>
+          </div>
+        </form>
+
+        {isConnected && (
+          <>
+            <Separator />
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+                  <DownloadCloud className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold">Backup to Drive Now</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Upload the current database file to your Google Drive as a
+                    timestamped backup.
+                  </p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                onClick={onBackupNow}
+                disabled={backing}
+                className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {backing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <DownloadCloud className="w-4 h-4" />
+                    Backup to Drive Now
+                  </>
+                )}
+              </Button>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

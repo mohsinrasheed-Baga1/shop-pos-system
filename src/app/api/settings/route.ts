@@ -32,6 +32,33 @@ export async function PUT(req: NextRequest) {
     invoicePrefix: body.invoicePrefix,
     printerWidth: Number(body.printerWidth) === 80 ? 80 : 58,
   };
+  // Multi-computer sharing fields (optional). When present we persist them
+  // alongside the other settings so the GET /api/settings response reflects
+  // the current sharing mode to the UI.
+  if (typeof body.shareMode === "string") {
+    const mode = body.shareMode;
+    if (mode === "local" || mode === "host" || mode === "client") {
+      data.shareMode = mode;
+    }
+  }
+  if (body.dbNetworkPath !== undefined) {
+    const p = typeof body.dbNetworkPath === "string" ? body.dbNetworkPath.trim() : "";
+    data.dbNetworkPath = p ? p : null;
+  }
+  // Google Drive backup integration fields (optional, nullable).
+  // An empty string is treated as null (disconnects Google Drive).
+  if (body.googleClientId !== undefined) {
+    const v = typeof body.googleClientId === "string" ? body.googleClientId.trim() : "";
+    data.googleClientId = v ? v : null;
+  }
+  if (body.googleClientSecret !== undefined) {
+    const v = typeof body.googleClientSecret === "string" ? body.googleClientSecret.trim() : "";
+    data.googleClientSecret = v ? v : null;
+  }
+  if (body.googleRefreshToken !== undefined) {
+    const v = typeof body.googleRefreshToken === "string" ? body.googleRefreshToken.trim() : "";
+    data.googleRefreshToken = v ? v : null;
+  }
   const settings = await db.settings.upsert({
     where: { id: "shop" },
     update: data,

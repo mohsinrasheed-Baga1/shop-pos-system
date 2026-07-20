@@ -118,6 +118,15 @@ export interface Settings {
   invoicePrefix: string;
   printerWidth: number;
   backupPasswordHash: string | null;
+  // Multi-computer sharing: "local" | "host" | "client"
+  shareMode: string;
+  // When shareMode === "client", this is the network DB path
+  // (e.g. \\HOST\ShopPOS\pos.db)
+  dbNetworkPath: string | null;
+  // Google Drive backup integration
+  googleClientId: string | null;
+  googleClientSecret: string | null;
+  googleRefreshToken: string | null;
 }
 
 export interface User {

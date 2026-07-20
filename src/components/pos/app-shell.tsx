@@ -120,18 +120,21 @@ export function AppShell({ user, settings }: AppShellProps) {
           <Store className="w-5 h-5 text-emerald-600" />
           {settings?.shopName || "POS"}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          aria-label="theme"
-        >
-          {mounted && theme === "dark" ? (
-            <Sun className="w-5 h-5" />
-          ) : (
-            <Moon className="w-5 h-5" />
-          )}
-        </Button>
+        <div className="flex items-center gap-1">
+          <NotificationsBell />
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            aria-label="theme"
+          >
+            {mounted && theme === "dark" ? (
+              <Sun className="w-5 h-5" />
+            ) : (
+              <Moon className="w-5 h-5" />
+            )}
+          </Button>
+        </div>
       </header>
 
       <div className="flex flex-1">
@@ -156,14 +159,19 @@ export function AppShell({ user, settings }: AppShellProps) {
                 </div>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="lg:hidden"
-              onClick={() => setSidebarOpen(false)}
-            >
-              <X className="w-5 h-5" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <div className="hidden lg:block">
+                <NotificationsBell />
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
           </div>
 
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">

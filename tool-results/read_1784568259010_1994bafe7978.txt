@@ -1,0 +1,1948 @@
+     1→"use client";
+     2→
+     3→import * as React from "react";
+     4→import {
+     5→  Card,
+     6→  CardContent,
+     7→  CardDescription,
+     8→  CardHeader,
+     9→  CardTitle,
+    10→} from "@/components/ui/card";
+    11→import { Button } from "@/components/ui/button";
+    12→import { Input } from "@/components/ui/input";
+    13→import { Label } from "@/components/ui/label";
+    14→import { Textarea } from "@/components/ui/textarea";
+    15→import { Switch } from "@/components/ui/switch";
+    16→import { Separator } from "@/components/ui/separator";
+    17→import { Skeleton } from "@/components/ui/skeleton";
+    18→import { Badge } from "@/components/ui/badge";
+    19→import {
+    20→  AlertDialog,
+    21→  AlertDialogAction,
+    22→  AlertDialogCancel,
+    23→  AlertDialogContent,
+    24→  AlertDialogDescription,
+    25→  AlertDialogFooter,
+    26→  AlertDialogHeader,
+    27→  AlertDialogTitle,
+    28→  AlertDialogTrigger,
+    29→} from "@/components/ui/alert-dialog";
+    30→import {
+    31→  Dialog,
+    32→  DialogContent,
+    33→  DialogDescription,
+    34→  DialogFooter,
+    35→  DialogHeader,
+    36→  DialogTitle,
+    37→  DialogTrigger,
+    38→} from "@/components/ui/dialog";
+    39→import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+    40→import { toast } from "sonner";
+    41→import {
+    42→  Store,
+    43→  Tag,
+    44→  Image as ImageIcon,
+    45→  Printer,
+    46→  Key,
+    47→  Shield,
+    48→  Database,
+    49→  Download,
+    50→  Upload,
+    51→  Trash2,
+    52→  ScanBarcode,
+    53→  Lock,
+    54→  Save,
+    55→  Loader2,
+    56→  Info,
+    57→  Receipt,
+    58→  Percent,
+    59→  FileText,
+    60→  Phone,
+    61→  MapPin,
+    62→  KeyRound,
+    63→  ShieldCheck,
+    64→  RefreshCw,
+    65→  X,
+    66→} from "lucide-react";
+    67→import type { Settings } from "@/types";
+    68→import { useAppStore } from "@/stores/use-pos-store";
+    69→
+    70→interface BackupFile {
+    71→  name: string;
+    72→  size: number;
+    73→  mtime: string;
+    74→}
+    75→
+    76→// ============================================================
+    77→// Helpers
+    78→// ============================================================
+    79→
+    80→/**
+    81→ * Resize/compress an image file to a base64 data URL using a canvas.
+    82→ * Used for the shop logo so we don't store huge base64 strings in the DB.
+    83→ */
+    84→function resizeImageToDataUrl(file: File, maxSize = 200): Promise<string> {
+    85→  return new Promise((resolve, reject) => {
+    86→    const reader = new FileReader();
+    87→    reader.onload = () => {
+    88→      const img = new Image();
+    89→      img.onload = () => {
+    90→        let { width, height } = img;
+    91→        if (width > height) {
+    92→          if (width > maxSize) {
+    93→            height = Math.round((height * maxSize) / width);
+    94→            width = maxSize;
+    95→          }
+    96→        } else {
+    97→          if (height > maxSize) {
+    98→            width = Math.round((width * maxSize) / height);
+    99→            height = maxSize;
+   100→          }
+   101→        }
+   102→        const canvas = document.createElement("canvas");
+   103→        canvas.width = width;
+   104→        canvas.height = height;
+   105→        const ctx = canvas.getContext("2d");
+   106→        if (!ctx) return reject(new Error("Canvas not supported"));
+   107→        ctx.drawImage(img, 0, 0, width, height);
+   108→        try {
+   109→          resolve(canvas.toDataURL("image/png"));
+   110→        } catch {
+   111→          resolve(canvas.toDataURL("image/jpeg", 0.9));
+   112→        }
+   113→      };
+   114→      img.onerror = () => reject(new Error("Image load failed"));
+   115→      img.src = reader.result as string;
+   116→    };
+   117→    reader.onerror = () => reject(new Error("File read failed"));
+   118→    reader.readAsDataURL(file);
+   119→  });
+   120→}
+   121→
+   122→function formatBytes(bytes: number): string {
+   123→  if (bytes < 1024) return `${bytes} B`;
+   124→  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+   125→  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+   126→}
+   127→
+   128→function formatDate(iso: string): string {
+   129→  try {
+   130→    return new Date(iso).toLocaleString("en-US");
+   131→  } catch {
+   132→    return iso;
+   133→  }
+   134→}
+   135→
+   136→// ============================================================
+   137→// Main SettingsView
+   138→// ============================================================
+   139→export function SettingsView() {
+   140→  const [loading, setLoading] = React.useState(true);
+   141→  const [settings, setSettings] = React.useState<Settings | null>(null);
+   142→
+   143→  const reload = React.useCallback(async () => {
+   144→    try {
+   145→      const res = await fetch("/api/settings", { cache: "no-store" });
+   146→      if (!res.ok) throw new Error("fetch failed");
+   147→      const data = await res.json();
+   148→      if (data.settings) setSettings(data.settings);
+   149→    } catch {
+   150→      toast.error("Could not load settings");
+   151→    }
+   152→  }, []);
+   153→
+   154→  React.useEffect(() => {
+   155→    let active = true;
+   156→    (async () => {
+   157→      await reload();
+   158→      if (active) setLoading(false);
+   159→    })();
+   160→    return () => {
+   161→      active = false;
+   162→    };
+   163→  }, [reload]);
+   164→
+   165→  /**
+   166→   * Save a partial settings patch. The full settings object is sent to the
+   167→   * API (which upserts) so other fields are preserved.
+   168→   */
+   169→  const savePartial = React.useCallback(
+   170→    async (partial: Partial<Settings>): Promise<Settings> => {
+   171→      if (!settings) throw new Error("Settings not loaded");
+   172→      const pick = <K extends keyof Settings>(key: K): Settings[K] =>
+   173→        partial[key] !== undefined
+   174→          ? (partial[key] as Settings[K])
+   175→          : settings[key];
+   176→      const body = {
+   177→        shopName: pick("shopName"),
+   178→        subName: pick("subName"),
+   179→        logo: pick("logo"),
+   180→        shopAddress: pick("shopAddress"),
+   181→        shopPhone: pick("shopPhone"),
+   182→        currency: pick("currency"),
+   183→        taxEnabled: pick("taxEnabled"),
+   184→        defaultTax: pick("defaultTax"),
+   185→        receiptFooter: pick("receiptFooter"),
+   186→        invoicePrefix: pick("invoicePrefix"),
+   187→        printerWidth: pick("printerWidth"),
+   188→      };
+   189→      const res = await fetch("/api/settings", {
+   190→        method: "PUT",
+   191→        headers: { "Content-Type": "application/json" },
+   192→        body: JSON.stringify(body),
+   193→      });
+   194→      if (!res.ok) {
+   195→        const err = await res.json().catch(() => null);
+   196→        throw new Error(err?.error || "Save failed");
+   197→      }
+   198→      const data = await res.json();
+   199→      const s: Settings | undefined = data?.settings;
+   200→      if (s) setSettings(s);
+   201→      return s as Settings;
+   202→    },
+   203→    [settings]
+   204→  );
+   205→
+   206→  if (loading || !settings) {
+   207→    return (
+   208→      <div className="space-y-4 max-w-5xl mx-auto" dir="ltr">
+   209→        <Skeleton className="h-16 w-full rounded-xl" />
+   210→        <Skeleton className="h-24 w-full rounded-xl" />
+   211→        <Skeleton className="h-64 w-full rounded-xl" />
+   212→        <Skeleton className="h-40 w-full rounded-xl" />
+   213→        <Skeleton className="h-40 w-full rounded-xl" />
+   214→      </div>
+   215→    );
+   216→  }
+   217→
+   218→  return (
+   219→    <div className="space-y-4 max-w-5xl mx-auto" dir="ltr">
+   220→      {/* Page header */}
+   221→      <div className="flex items-center gap-3">
+   222→        <div className="w-11 h-11 rounded-xl bg-emerald-600 flex items-center justify-center shadow-sm shrink-0">
+   223→          <Store className="w-6 h-6 text-white" />
+   224→        </div>
+   225→        <div>
+   226→          <h1 className="text-xl lg:text-2xl font-bold">Shop Settings</h1>
+   227→          <p className="text-sm text-muted-foreground">
+   228→            Control your overall POS system settings from here
+   229→          </p>
+   230→        </div>
+   231→      </div>
+   232→
+   233→      {/* Info card — each section saves independently */}
+   234→      <Card className="border-emerald-100 bg-emerald-50/40 dark:bg-emerald-950/20">
+   235→        <CardContent className="p-4 lg:p-5">
+   236→          <div className="flex items-start gap-3">
+   237→            <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+   238→              <Info className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
+   239→            </div>
+   240→            <div className="space-y-2 text-sm leading-6">
+   241→              <p className="font-semibold text-emerald-800 dark:text-emerald-300">
+   242→                Each section below saves independently
+   243→              </p>
+   244→              <p className="text-muted-foreground">
+   245→                Shop details, sub-name, logo, printer settings, passwords and
+   246→                backups are managed separately — use the Save button on each
+   247→                card.
+   248→              </p>
+   249→              <div className="flex flex-wrap gap-2 pt-1">
+   250→                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
+   251→                  <Receipt className="w-3.5 h-3.5" /> Receipts
+   252→                </span>
+   253→                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
+   254→                  <FileText className="w-3.5 h-3.5" /> Invoices
+   255→                </span>
+   256→                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
+   257→                  <Percent className="w-3.5 h-3.5" /> Tax
+   258→                </span>
+   259→                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
+   260→                  <ImageIcon className="w-3.5 h-3.5" /> Logo
+   261→                </span>
+   262→              </div>
+   263→            </div>
+   264→          </div>
+   265→        </CardContent>
+   266→      </Card>
+   267→
+   268→      {/* 1. Shop Details card */}
+   269→      <ShopDetailsCard settings={settings} onSave={savePartial} />
+   270→
+   271→      {/* 2. Sub-Name card */}
+   272→      <SubNameCard settings={settings} onSave={savePartial} />
+   273→
+   274→      {/* 3. Logo card */}
+   275→      <LogoCard settings={settings} onSave={savePartial} />
+   276→
+   277→      {/* 4. Printer Settings card */}
+   278→      <PrinterSettingsCard settings={settings} onSave={savePartial} />
+   279→
+   280→      {/* 5. Change Password card */}
+   281→      <ChangePasswordCard />
+   282→
+   283→      {/* 6. Backup Password card */}
+   284→      <BackupPasswordCard settings={settings} onSaved={reload} />
+   285→
+   286→      {/* 7. Backup & Restore card */}
+   287→      <BackupRestoreCard />
+   288→
+   289→      {/* 8. Barcode Scanner card */}
+   290→      <ScannerCard />
+   291→    </div>
+   292→  );
+   293→}
+   294→
+   295→// ============================================================
+   296→// 1. Shop Details card
+   297→// ============================================================
+   298→interface ShopDetailsCardProps {
+   299→  settings: Settings;
+   300→  onSave: (partial: Partial<Settings>) => Promise<Settings>;
+   301→}
+   302→
+   303→function ShopDetailsCard({ settings, onSave }: ShopDetailsCardProps) {
+   304→  const [form, setForm] = React.useState({
+   305→    shopName: settings.shopName ?? "",
+   306→    shopAddress: settings.shopAddress ?? "",
+   307→    shopPhone: settings.shopPhone ?? "",
+   308→    currency: settings.currency || "Rs",
+   309→    taxEnabled: !!settings.taxEnabled,
+   310→    defaultTax:
+   311→      typeof settings.defaultTax === "number" && !isNaN(settings.defaultTax)
+   312→        ? settings.defaultTax
+   313→        : 0,
+   314→    receiptFooter: settings.receiptFooter ?? "",
+   315→    invoicePrefix: settings.invoicePrefix || "INV",
+   316→  });
+   317→  const [saving, setSaving] = React.useState(false);
+   318→
+   319→  React.useEffect(() => {
+   320→    setForm({
+   321→      shopName: settings.shopName ?? "",
+   322→      shopAddress: settings.shopAddress ?? "",
+   323→      shopPhone: settings.shopPhone ?? "",
+   324→      currency: settings.currency || "Rs",
+   325→      taxEnabled: !!settings.taxEnabled,
+   326→      defaultTax:
+   327→        typeof settings.defaultTax === "number" && !isNaN(settings.defaultTax)
+   328→          ? settings.defaultTax
+   329→          : 0,
+   330→      receiptFooter: settings.receiptFooter ?? "",
+   331→      invoicePrefix: settings.invoicePrefix || "INV",
+   332→    });
+   333→  }, [settings]);
+   334→
+   335→  function setField<K extends keyof typeof form>(
+   336→    key: K,
+   337→    value: (typeof form)[K]
+   338→  ) {
+   339→    setForm((prev) => ({ ...prev, [key]: value }));
+   340→  }
+   341→
+   342→  async function onSubmit(e: React.FormEvent) {
+   343→    e.preventDefault();
+   344→    if (saving) return;
+   345→    setSaving(true);
+   346→    try {
+   347→      await onSave({
+   348→        shopName: form.shopName.trim() || "My Shop",
+   349→        shopAddress: form.shopAddress.trim(),
+   350→        shopPhone: form.shopPhone.trim(),
+   351→        currency: form.currency.trim() || "Rs",
+   352→        taxEnabled: form.taxEnabled,
+   353→        defaultTax: form.taxEnabled ? Number(form.defaultTax) || 0 : 0,
+   354→        receiptFooter: form.receiptFooter.trim(),
+   355→        invoicePrefix: form.invoicePrefix.trim() || "INV",
+   356→      });
+   357→      toast.success("Shop details saved");
+   358→    } catch (err: any) {
+   359→      toast.error(err?.message || "Could not save");
+   360→    } finally {
+   361→      setSaving(false);
+   362→    }
+   363→  }
+   364→
+   365→  return (
+   366→    <Card className="shadow-sm">
+   367→      <CardHeader>
+   368→        <CardTitle className="text-lg flex items-center gap-2">
+   369→          <Store className="w-5 h-5 text-emerald-600" />
+   370→          Shop Details
+   371→        </CardTitle>
+   372→        <CardDescription>
+   373→          Shop name, address, phone, currency, tax and receipt settings
+   374→        </CardDescription>
+   375→      </CardHeader>
+   376→      <CardContent>
+   377→        <form onSubmit={onSubmit} className="space-y-6">
+   378→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+   379→            <div className="space-y-2 lg:col-span-2">
+   380→              <Label htmlFor="shopName" className="flex items-center gap-1.5">
+   381→                <Store className="w-3.5 h-3.5 text-emerald-600" />
+   382→                Shop Name <span className="text-red-500">*</span>
+   383→              </Label>
+   384→              <Input
+   385→                id="shopName"
+   386→                value={form.shopName}
+   387→                onChange={(e) => setField("shopName", e.target.value)}
+   388→                placeholder="e.g. Noor General Store"
+   389→                required
+   390→                className="h-11"
+   391→              />
+   392→            </div>
+   393→
+   394→            <div className="space-y-2 lg:col-span-2">
+   395→              <Label htmlFor="shopAddress" className="flex items-center gap-1.5">
+   396→                <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+   397→                Address
+   398→              </Label>
+   399→              <Textarea
+   400→                id="shopAddress"
+   401→                value={form.shopAddress}
+   402→                onChange={(e) => setField("shopAddress", e.target.value)}
+   403→                placeholder="Full shop address"
+   404→                rows={2}
+   405→                className="resize-none"
+   406→              />
+   407→            </div>
+   408→
+   409→            <div className="space-y-2">
+   410→              <Label htmlFor="shopPhone" className="flex items-center gap-1.5">
+   411→                <Phone className="w-3.5 h-3.5 text-emerald-600" />
+   412→                Phone Number
+   413→              </Label>
+   414→              <Input
+   415→                id="shopPhone"
+   416→                value={form.shopPhone}
+   417→                onChange={(e) => setField("shopPhone", e.target.value)}
+   418→                placeholder="e.g. 0300-1234567"
+   419→                dir="ltr"
+   420→                className="h-11"
+   421→              />
+   422→            </div>
+   423→
+   424→            <div className="space-y-2">
+   425→              <Label htmlFor="currency" className="flex items-center gap-1.5">
+   426→                <Tag className="w-3.5 h-3.5 text-emerald-600" />
+   427→                Currency
+   428→              </Label>
+   429→              <Input
+   430→                id="currency"
+   431→                value={form.currency}
+   432→                onChange={(e) => setField("currency", e.target.value)}
+   433→                placeholder="Rs"
+   434→                dir="ltr"
+   435→                className="h-11"
+   436→              />
+   437→              <p className="text-xs text-muted-foreground">
+   438→                This symbol is shown with all amounts (e.g. Rs, $, &euro;)
+   439→              </p>
+   440→            </div>
+   441→          </div>
+   442→
+   443→          <Separator />
+   444→
+   445→          {/* Tax settings */}
+   446→          <div className="space-y-4">
+   447→            <div className="flex items-start justify-between gap-3 rounded-lg border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/10 p-3">
+   448→              <div className="space-y-0.5">
+   449→                <Label
+   450→                  htmlFor="taxEnabled"
+   451→                  className="flex items-center gap-1.5 cursor-pointer"
+   452→                >
+   453→                  <Percent className="w-3.5 h-3.5 text-emerald-600" />
+   454→                  Enable Tax
+   455→                </Label>
+   456→                <p className="text-xs text-muted-foreground">
+   457→                  When enabled, default tax is applied to sales
+   458→                </p>
+   459→              </div>
+   460→              <Switch
+   461→                id="taxEnabled"
+   462→                checked={form.taxEnabled}
+   463→                onCheckedChange={(v) => setField("taxEnabled", v)}
+   464→              />
+   465→            </div>
+   466→
+   467→            {form.taxEnabled && (
+   468→              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+   469→                <div className="space-y-2">
+   470→                  <Label
+   471→                    htmlFor="defaultTax"
+   472→                    className="flex items-center gap-1.5"
+   473→                  >
+   474→                    <Percent className="w-3.5 h-3.5 text-emerald-600" />
+   475→                    Default Tax %
+   476→                  </Label>
+   477→                  <Input
+   478→                    id="defaultTax"
+   479→                    type="number"
+   480→                    min={0}
+   481→                    max={100}
+   482→                    step="0.01"
+   483→                    value={form.defaultTax}
+   484→                    onChange={(e) =>
+   485→                      setField("defaultTax", Number(e.target.value))
+   486→                    }
+   487→                    placeholder="0"
+   488→                    dir="ltr"
+   489→                    className="h-11"
+   490→                  />
+   491→                  <p className="text-xs text-muted-foreground">
+   492→                    Percentage between 0 and 100 (e.g. 5 means 5%)
+   493→                  </p>
+   494→                </div>
+   495→              </div>
+   496→            )}
+   497→          </div>
+   498→
+   499→          <Separator />
+   500→
+   501→          {/* Receipt & invoice settings */}
+   502→          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+   503→            <div className="space-y-2 lg:col-span-2">
+   504→              <Label
+   505→                htmlFor="receiptFooter"
+   506→                className="flex items-center gap-1.5"
+   507→              >
+   508→                <Receipt className="w-3.5 h-3.5 text-emerald-600" />
+   509→                Receipt Footer Text
+   510→              </Label>
+   511→              <Textarea
+   512→                id="receiptFooter"
+   513→                value={form.receiptFooter}
+   514→                onChange={(e) => setField("receiptFooter", e.target.value)}
+   515→                placeholder="e.g. Thank you! Please come again."
+   516→                rows={2}
+   517→                className="resize-none"
+   518→              />
+   519→              <p className="text-xs text-muted-foreground">
+   520→                This text is printed at the bottom of every receipt
+   521→              </p>
+   522→            </div>
+   523→
+   524→            <div className="space-y-2">
+   525→              <Label
+   526→                htmlFor="invoicePrefix"
+   527→                className="flex items-center gap-1.5"
+   528→              >
+   529→                <FileText className="w-3.5 h-3.5 text-emerald-600" />
+   530→                Invoice Prefix
+   531→              </Label>
+   532→              <Input
+   533→                id="invoicePrefix"
+   534→                value={form.invoicePrefix}
+   535→                onChange={(e) => setField("invoicePrefix", e.target.value)}
+   536→                placeholder="INV"
+   537→                dir="ltr"
+   538→                className="h-11 uppercase"
+   539→              />
+   540→              <p className="text-xs text-muted-foreground">
+   541→                This prefix is used at the start of every invoice number (e.g.
+   542→                INV-0001)
+   543→              </p>
+   544→            </div>
+   545→          </div>
+   546→
+   547→          {/* Submit */}
+   548→          <div className="flex justify-end pt-2">
+   549→            <Button
+   550→              type="submit"
+   551→              disabled={saving}
+   552→              className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white min-w-[180px]"
+   553→            >
+   554→              {saving ? (
+   555→                <>
+   556→                  <Loader2 className="w-4 h-4 animate-spin" />
+   557→                  Saving...
+   558→                </>
+   559→              ) : (
+   560→                <>
+   561→                  <Save className="w-4 h-4" />
+   562→                  Save Shop Details
+   563→                </>
+   564→              )}
+   565→            </Button>
+   566→          </div>
+   567→        </form>
+   568→      </CardContent>
+   569→    </Card>
+   570→  );
+   571→}
+   572→
+   573→// ============================================================
+   574→// 2. Sub-Name card
+   575→// ============================================================
+   576→interface SubNameCardProps {
+   577→  settings: Settings;
+   578→  onSave: (partial: Partial<Settings>) => Promise<Settings>;
+   579→}
+   580→
+   581→function SubNameCard({ settings, onSave }: SubNameCardProps) {
+   582→  const [subName, setSubName] = React.useState(settings.subName ?? "");
+   583→  const [saving, setSaving] = React.useState(false);
+   584→
+   585→  React.useEffect(() => {
+   586→    setSubName(settings.subName ?? "");
+   587→  }, [settings]);
+   588→
+   589→  async function onSubmit(e: React.FormEvent) {
+   590→    e.preventDefault();
+   591→    if (saving) return;
+   592→    setSaving(true);
+   593→    try {
+   594→      await onSave({ subName: subName.trim() });
+   595→      toast.success("Sub-name saved");
+   596→    } catch (err: any) {
+   597→      toast.error(err?.message || "Could not save");
+   598→    } finally {
+   599→      setSaving(false);
+   600→    }
+   601→  }
+   602→
+   603→  return (
+   604→    <Card className="shadow-sm">
+   605→      <CardHeader>
+   606→        <CardTitle className="text-lg flex items-center gap-2">
+   607→          <Tag className="w-5 h-5 text-emerald-600" />
+   608→          Sub-Name
+   609→        </CardTitle>
+   610→        <CardDescription>
+   611→          Tagline/brand name shown on shop cards and receipts (e.g. &quot;Master
+   612→          Abdul Rasheed &amp; Sons&quot;)
+   613→        </CardDescription>
+   614→      </CardHeader>
+   615→      <CardContent>
+   616→        <form onSubmit={onSubmit} className="space-y-4">
+   617→          <div className="space-y-2">
+   618→            <Label htmlFor="subName" className="flex items-center gap-1.5">
+   619→              <Tag className="w-3.5 h-3.5 text-emerald-600" />
+   620→              Sub-Name / Tagline
+   621→            </Label>
+   622→            <Input
+   623→              id="subName"
+   624→              value={subName}
+   625→              onChange={(e) => setSubName(e.target.value)}
+   626→              placeholder="e.g. Master Abdul Rasheed & Sons"
+   627→              className="h-11"
+   628→            />
+   629→            <p className="text-xs text-muted-foreground">
+   630→              Leave empty to hide. Shown under the shop name on receipts and
+   631→              shop cards.
+   632→            </p>
+   633→          </div>
+   634→          <div className="flex justify-end">
+   635→            <Button
+   636→              type="submit"
+   637→              disabled={saving}
+   638→              className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white min-w-[160px]"
+   639→            >
+   640→              {saving ? (
+   641→                <>
+   642→                  <Loader2 className="w-4 h-4 animate-spin" />
+   643→                  Saving...
+   644→                </>
+   645→              ) : (
+   646→                <>
+   647→                  <Save className="w-4 h-4" />
+   648→                  Save Sub-Name
+   649→                </>
+   650→              )}
+   651→            </Button>
+   652→          </div>
+   653→        </form>
+   654→      </CardContent>
+   655→    </Card>
+   656→  );
+   657→}
+   658→
+   659→// ============================================================
+   660→// 3. Logo card
+   661→// ============================================================
+   662→interface LogoCardProps {
+   663→  settings: Settings;
+   664→  onSave: (partial: Partial<Settings>) => Promise<Settings>;
+   665→}
+   666→
+   667→function LogoCard({ settings, onSave }: LogoCardProps) {
+   668→  const [logo, setLogo] = React.useState<string | null>(settings.logo ?? null);
+   669→  // Staged new logo from a selected file (not yet saved)
+   670→  const [pendingLogo, setPendingLogo] = React.useState<string | null>(null);
+   671→  // True when user clicked "Remove Logo" (will save null)
+   672→  const [pendingRemoved, setPendingRemoved] = React.useState(false);
+   673→  const [saving, setSaving] = React.useState(false);
+   674→  const [processing, setProcessing] = React.useState(false);
+   675→  const fileRef = React.useRef<HTMLInputElement>(null);
+   676→
+   677→  React.useEffect(() => {
+   678→    setLogo(settings.logo ?? null);
+   679→    setPendingLogo(null);
+   680→    setPendingRemoved(false);
+   681→  }, [settings]);
+   682→
+   683→  const preview = pendingLogo ?? (pendingRemoved ? null : logo);
+   684→  const dirty = pendingLogo !== null || pendingRemoved;
+   685→
+   686→  async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+   687→    const file = e.target.files?.[0];
+   688→    if (!file) return;
+   689→    if (!file.type.startsWith("image/")) {
+   690→      toast.error("Please select an image file");
+   691→      return;
+   692→    }
+   693→    setProcessing(true);
+   694→    try {
+   695→      const dataUrl = await resizeImageToDataUrl(file, 200);
+   696→      setPendingLogo(dataUrl);
+   697→      setPendingRemoved(false);
+   698→      toast.success("Image ready — click Save Logo to apply");
+   699→    } catch (err: any) {
+   700→      toast.error(err?.message || "Could not process image");
+   701→    } finally {
+   702→      setProcessing(false);
+   703→      if (fileRef.current) fileRef.current.value = "";
+   704→    }
+   705→  }
+   706→
+   707→  async function onSubmit(e: React.FormEvent) {
+   708→    e.preventDefault();
+   709→    if (saving || !dirty) return;
+   710→    setSaving(true);
+   711→    try {
+   712→      let nextLogo: string | null;
+   713→      if (pendingLogo) nextLogo = pendingLogo;
+   714→      else if (pendingRemoved) nextLogo = null;
+   715→      else nextLogo = logo;
+   716→      await onSave({ logo: nextLogo });
+   717→      setPendingLogo(null);
+   718→      setPendingRemoved(false);
+   719→      toast.success("Logo saved");
+   720→    } catch (err: any) {
+   721→      toast.error(err?.message || "Could not save logo");
+   722→    } finally {
+   723→      setSaving(false);
+   724→    }
+   725→  }
+   726→
+   727→  return (
+   728→    <Card className="shadow-sm">
+   729→      <CardHeader>
+   730→        <CardTitle className="text-lg flex items-center gap-2">
+   731→          <ImageIcon className="w-5 h-5 text-emerald-600" />
+   732→          Logo
+   733→        </CardTitle>
+   734→        <CardDescription>
+   735→          Upload your shop logo. It appears on receipts, shop cards, and
+   736→          barcodes. Image is automatically resized to 200×200 px.
+   737→        </CardDescription>
+   738→      </CardHeader>
+   739→      <CardContent>
+   740→        <form onSubmit={onSubmit} className="space-y-4">
+   741→          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+   742→            <div className="w-32 h-32 rounded-xl border-2 border-dashed border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/10 flex items-center justify-center overflow-hidden shrink-0">
+   743→              {preview ? (
+   744→                <img
+   745→                  src={preview}
+   746→                  alt="Logo preview"
+   747→                  className="w-full h-full object-contain"
+   748→                />
+   749→              ) : (
+   750→                <ImageIcon className="w-10 h-10 text-muted-foreground/50" />
+   751→              )}
+   752→            </div>
+   753→            <div className="flex-1 space-y-3">
+   754→              <input
+   755→                ref={fileRef}
+   756→                type="file"
+   757→                accept="image/*"
+   758→                onChange={onFileChange}
+   759→                className="hidden"
+   760→                id="logo-upload"
+   761→              />
+   762→              <div className="flex flex-wrap gap-2">
+   763→                <Button
+   764→                  type="button"
+   765→                  variant="outline"
+   766→                  className="h-10 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+   767→                  onClick={() => fileRef.current?.click()}
+   768→                  disabled={processing || saving}
+   769→                >
+   770→                  {processing ? (
+   771→                    <>
+   772→                      <Loader2 className="w-4 h-4 animate-spin" />
+   773→                      Processing...
+   774→                    </>
+   775→                  ) : (
+   776→                    <>
+   777→                      <Upload className="w-4 h-4" />
+   778→                      Choose Image
+   779→                    </>
+   780→                  )}
+   781→                </Button>
+   782→                {pendingLogo && (
+   783→                  <Button
+   784→                    type="button"
+   785→                    variant="ghost"
+   786→                    className="h-10"
+   787→                    onClick={() => setPendingLogo(null)}
+   788→                    disabled={saving}
+   789→                  >
+   790→                    <X className="w-4 h-4" />
+   791→                    Discard
+   792→                  </Button>
+   793→                )}
+   794→                {logo && !pendingLogo && !pendingRemoved && (
+   795→                  <Button
+   796→                    type="button"
+   797→                    variant="ghost"
+   798→                    className="h-10 text-red-600 hover:bg-red-50 hover:text-red-700"
+   799→                    onClick={() => setPendingRemoved(true)}
+   800→                    disabled={saving}
+   801→                  >
+   802→                    <Trash2 className="w-4 h-4" />
+   803→                    Remove Logo
+   804→                  </Button>
+   805→                )}
+   806→                {pendingRemoved && (
+   807→                  <Button
+   808→                    type="button"
+   809→                    variant="ghost"
+   810→                    className="h-10"
+   811→                    onClick={() => setPendingRemoved(false)}
+   812→                    disabled={saving}
+   813→                  >
+   814→                    Undo Remove
+   815→                  </Button>
+   816→                )}
+   817→              </div>
+   818→              {pendingRemoved && (
+   819→                <p className="text-xs text-red-600">
+   820→                  Logo will be removed when you click Save Logo.
+   821→                </p>
+   822→              )}
+   823→              {pendingLogo && (
+   824→                <p className="text-xs text-emerald-700 dark:text-emerald-400">
+   825→                  New logo staged. Click Save Logo to apply.
+   826→                </p>
+   827→              )}
+   828→            </div>
+   829→          </div>
+   830→          <div className="flex justify-end pt-2">
+   831→            <Button
+   832→              type="submit"
+   833→              disabled={saving || !dirty}
+   834→              className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white min-w-[160px]"
+   835→            >
+   836→              {saving ? (
+   837→                <>
+   838→                  <Loader2 className="w-4 h-4 animate-spin" />
+   839→                  Saving...
+   840→                </>
+   841→              ) : (
+   842→                <>
+   843→                  <Save className="w-4 h-4" />
+   844→                  Save Logo
+   845→                </>
+   846→              )}
+   847→            </Button>
+   848→          </div>
+   849→        </form>
+   850→      </CardContent>
+   851→    </Card>
+   852→  );
+   853→}
+   854→
+   855→// ============================================================
+   856→// 4. Printer Settings card
+   857→// ============================================================
+   858→interface PrinterSettingsCardProps {
+   859→  settings: Settings;
+   860→  onSave: (partial: Partial<Settings>) => Promise<Settings>;
+   861→}
+   862→
+   863→function PrinterSettingsCard({ settings, onSave }: PrinterSettingsCardProps) {
+   864→  const [width, setWidth] = React.useState<number>(
+   865→    settings.printerWidth === 80 ? 80 : 58
+   866→  );
+   867→  const [saving, setSaving] = React.useState(false);
+   868→
+   869→  React.useEffect(() => {
+   870→    setWidth(settings.printerWidth === 80 ? 80 : 58);
+   871→  }, [settings]);
+   872→
+   873→  async function onSubmit(e: React.FormEvent) {
+   874→    e.preventDefault();
+   875→    if (saving) return;
+   876→    setSaving(true);
+   877→    try {
+   878→      await onSave({ printerWidth: width });
+   879→      toast.success("Printer settings saved");
+   880→    } catch (err: any) {
+   881→      toast.error(err?.message || "Could not save");
+   882→    } finally {
+   883→      setSaving(false);
+   884→    }
+   885→  }
+   886→
+   887→  return (
+   888→    <Card className="shadow-sm">
+   889→      <CardHeader>
+   890→        <CardTitle className="text-lg flex items-center gap-2">
+   891→          <Printer className="w-5 h-5 text-emerald-600" />
+   892→          Printer Settings
+   893→        </CardTitle>
+   894→        <CardDescription>
+   895→          Choose the thermal receipt paper width used by your printer
+   896→        </CardDescription>
+   897→      </CardHeader>
+   898→      <CardContent>
+   899→        <form onSubmit={onSubmit} className="space-y-5">
+   900→          <div className="grid grid-cols-2 gap-3 max-w-md">
+   901→            <button
+   902→              type="button"
+   903→              onClick={() => setWidth(58)}
+   904→              className={`flex flex-col items-center gap-2 rounded-xl border-2 p-5 transition-colors ${
+   905→                width === 58
+   906→                  ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
+   907→                  : "border-border hover:border-emerald-300 hover:bg-emerald-50/30"
+   908→              }`}
+   909→            >
+   910→              <Printer className="w-7 h-7" />
+   911→              <span className="font-bold text-lg">58mm</span>
+   912→              <span className="text-xs text-muted-foreground">
+   913→                Small receipt
+   914→              </span>
+   915→            </button>
+   916→            <button
+   917→              type="button"
+   918→              onClick={() => setWidth(80)}
+   919→              className={`flex flex-col items-center gap-2 rounded-xl border-2 p-5 transition-colors ${
+   920→                width === 80
+   921→                  ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300"
+   922→                  : "border-border hover:border-emerald-300 hover:bg-emerald-50/30"
+   923→              }`}
+   924→            >
+   925→              <Printer className="w-7 h-7" />
+   926→              <span className="font-bold text-lg">80mm</span>
+   927→              <span className="text-xs text-muted-foreground">
+   928→                Wide receipt
+   929→              </span>
+   930→            </button>
+   931→          </div>
+   932→          <p className="text-xs text-muted-foreground">
+   933→            Current: {width}mm thermal paper. This affects receipt layout
+   934→            width.
+   935→          </p>
+   936→          <div className="flex justify-end">
+   937→            <Button
+   938→              type="submit"
+   939→              disabled={saving}
+   940→              className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white min-w-[200px]"
+   941→            >
+   942→              {saving ? (
+   943→                <>
+   944→                  <Loader2 className="w-4 h-4 animate-spin" />
+   945→                  Saving...
+   946→                </>
+   947→              ) : (
+   948→                <>
+   949→                  <Save className="w-4 h-4" />
+   950→                  Save Printer Settings
+   951→                </>
+   952→              )}
+   953→            </Button>
+   954→          </div>
+   955→        </form>
+   956→      </CardContent>
+   957→    </Card>
+   958→  );
+   959→}
+   960→
+   961→// ============================================================
+   962→// 5. Change Password card
+   963→// ============================================================
+   964→function ChangePasswordCard() {
+   965→  const [currentPassword, setCurrentPassword] = React.useState("");
+   966→  const [newPassword, setNewPassword] = React.useState("");
+   967→  const [confirmPassword, setConfirmPassword] = React.useState("");
+   968→  const [saving, setSaving] = React.useState(false);
+   969→
+   970→  const newPasswordError =
+   971→    newPassword.length > 0 && newPassword.length < 6
+   972→      ? "Password must be at least 6 characters"
+   973→      : "";
+   974→  const confirmError =
+   975→    confirmPassword.length > 0 && newPassword !== confirmPassword
+   976→      ? "Passwords do not match"
+   977→      : "";
+   978→
+   979→  const canSubmit =
+   980→    currentPassword.length > 0 &&
+   981→    newPassword.length >= 6 &&
+   982→    confirmPassword === newPassword &&
+   983→    !saving;
+   984→
+   985→  async function onSubmit(e: React.FormEvent) {
+   986→    e.preventDefault();
+   987→    if (!canSubmit) return;
+   988→    setSaving(true);
+   989→    try {
+   990→      const res = await fetch("/api/settings/password", {
+   991→        method: "POST",
+   992→        headers: { "Content-Type": "application/json" },
+   993→        body: JSON.stringify({ currentPassword, newPassword }),
+   994→      });
+   995→      if (!res.ok) {
+   996→        const err = await res.json().catch(() => null);
+   997→        throw new Error(err?.error || "Change failed");
+   998→      }
+   999→      toast.success("Password changed");
+  1000→      setCurrentPassword("");
+  1001→      setNewPassword("");
+  1002→      setConfirmPassword("");
+  1003→    } catch (err: any) {
+  1004→      toast.error(err?.message || "Could not change password");
+  1005→    } finally {
+  1006→      setSaving(false);
+  1007→    }
+  1008→  }
+  1009→
+  1010→  return (
+  1011→    <Card className="shadow-sm">
+  1012→      <CardHeader>
+  1013→        <CardTitle className="text-lg flex items-center gap-2">
+  1014→          <Key className="w-5 h-5 text-emerald-600" />
+  1015→          Change Password
+  1016→        </CardTitle>
+  1017→        <CardDescription>Change your account login password</CardDescription>
+  1018→      </CardHeader>
+  1019→      <CardContent>
+  1020→        <form onSubmit={onSubmit} className="space-y-4">
+  1021→          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+  1022→            <div className="space-y-2">
+  1023→              <Label htmlFor="curPwd" className="flex items-center gap-1.5">
+  1024→                <Lock className="w-3.5 h-3.5 text-emerald-600" />
+  1025→                Current Password
+  1026→              </Label>
+  1027→              <Input
+  1028→                id="curPwd"
+  1029→                type="password"
+  1030→                value={currentPassword}
+  1031→                onChange={(e) => setCurrentPassword(e.target.value)}
+  1032→                placeholder="••••••"
+  1033→                dir="ltr"
+  1034→                className="h-11"
+  1035→                autoComplete="current-password"
+  1036→              />
+  1037→            </div>
+  1038→            <div className="space-y-2">
+  1039→              <Label htmlFor="newPwd" className="flex items-center gap-1.5">
+  1040→                <Key className="w-3.5 h-3.5 text-emerald-600" />
+  1041→                New Password
+  1042→              </Label>
+  1043→              <Input
+  1044→                id="newPwd"
+  1045→                type="password"
+  1046→                value={newPassword}
+  1047→                onChange={(e) => setNewPassword(e.target.value)}
+  1048→                placeholder="At least 6 chars"
+  1049→                dir="ltr"
+  1050→                className="h-11"
+  1051→                autoComplete="new-password"
+  1052→              />
+  1053→              {newPasswordError && (
+  1054→                <p className="text-xs text-red-600">{newPasswordError}</p>
+  1055→              )}
+  1056→            </div>
+  1057→            <div className="space-y-2">
+  1058→              <Label htmlFor="confPwd" className="flex items-center gap-1.5">
+  1059→                <Key className="w-3.5 h-3.5 text-emerald-600" />
+  1060→                Confirm Password
+  1061→              </Label>
+  1062→              <Input
+  1063→                id="confPwd"
+  1064→                type="password"
+  1065→                value={confirmPassword}
+  1066→                onChange={(e) => setConfirmPassword(e.target.value)}
+  1067→                placeholder="Re-type new password"
+  1068→                dir="ltr"
+  1069→                className="h-11"
+  1070→                autoComplete="new-password"
+  1071→              />
+  1072→              {confirmError && (
+  1073→                <p className="text-xs text-red-600">{confirmError}</p>
+  1074→              )}
+  1075→            </div>
+  1076→          </div>
+  1077→          <div className="flex justify-end">
+  1078→            <Button
+  1079→              type="submit"
+  1080→              disabled={!canSubmit}
+  1081→              className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white min-w-[180px]"
+  1082→            >
+  1083→              {saving ? (
+  1084→                <>
+  1085→                  <Loader2 className="w-4 h-4 animate-spin" />
+  1086→                  Changing...
+  1087→                </>
+  1088→              ) : (
+  1089→                <>
+  1090→                  <Key className="w-4 h-4" />
+  1091→                  Change Password
+  1092→                </>
+  1093→              )}
+  1094→            </Button>
+  1095→          </div>
+  1096→        </form>
+  1097→      </CardContent>
+  1098→    </Card>
+  1099→  );
+  1100→}
+  1101→
+  1102→// ============================================================
+  1103→// 6. Backup Password card
+  1104→// ============================================================
+  1105→interface BackupPasswordCardProps {
+  1106→  settings: Settings;
+  1107→  onSaved: () => Promise<void>;
+  1108→}
+  1109→
+  1110→function BackupPasswordCard({ settings, onSaved }: BackupPasswordCardProps) {
+  1111→  const isSet = !!settings.backupPasswordHash;
+  1112→  const [mode, setMode] = React.useState<"idle" | "set" | "update" | "generated">(
+  1113→    "idle"
+  1114→  );
+  1115→  const [newPassword, setNewPassword] = React.useState("");
+  1116→  const [currentPassword, setCurrentPassword] = React.useState("");
+  1117→  const [generated, setGenerated] = React.useState<string | null>(null);
+  1118→  const [saving, setSaving] = React.useState(false);
+  1119→  const [generating, setGenerating] = React.useState(false);
+  1120→
+  1121→  const newPasswordError =
+  1122→    newPassword.length > 0 && newPassword.length < 4
+  1123→      ? "Password must be at least 4 characters"
+  1124→      : "";
+  1125→
+  1126→  async function onSet(e: React.FormEvent) {
+  1127→    e.preventDefault();
+  1128→    if (saving || newPassword.length < 4) return;
+  1129→    setSaving(true);
+  1130→    try {
+  1131→      const res = await fetch("/api/settings/backup-password", {
+  1132→        method: "POST",
+  1133→        headers: { "Content-Type": "application/json" },
+  1134→        body: JSON.stringify({ action: "set", password: newPassword }),
+  1135→      });
+  1136→      if (!res.ok) {
+  1137→        const err = await res.json().catch(() => null);
+  1138→        throw new Error(err?.error || "Failed");
+  1139→      }
+  1140→      toast.success("Backup password set");
+  1141→      setNewPassword("");
+  1142→      setMode("idle");
+  1143→      await onSaved();
+  1144→    } catch (err: any) {
+  1145→      toast.error(err?.message || "Could not set password");
+  1146→    } finally {
+  1147→      setSaving(false);
+  1148→    }
+  1149→  }
+  1150→
+  1151→  async function onUpdate(e: React.FormEvent) {
+  1152→    e.preventDefault();
+  1153→    if (saving || newPassword.length < 4) return;
+  1154→    setSaving(true);
+  1155→    try {
+  1156→      const res = await fetch("/api/settings/backup-password", {
+  1157→        method: "POST",
+  1158→        headers: { "Content-Type": "application/json" },
+  1159→        body: JSON.stringify({
+  1160→          action: "update",
+  1161→          currentPassword,
+  1162→          password: newPassword,
+  1163→        }),
+  1164→      });
+  1165→      if (!res.ok) {
+  1166→        const err = await res.json().catch(() => null);
+  1167→        throw new Error(err?.error || "Failed");
+  1168→      }
+  1169→      toast.success("Backup password updated");
+  1170→      setNewPassword("");
+  1171→      setCurrentPassword("");
+  1172→      setMode("idle");
+  1173→      await onSaved();
+  1174→    } catch (err: any) {
+  1175→      toast.error(err?.message || "Could not update password");
+  1176→    } finally {
+  1177→      setSaving(false);
+  1178→    }
+  1179→  }
+  1180→
+  1181→  async function onGenerate() {
+  1182→    if (generating) return;
+  1183→    setGenerating(true);
+  1184→    try {
+  1185→      const res = await fetch("/api/settings/backup-password", {
+  1186→        method: "POST",
+  1187→        headers: { "Content-Type": "application/json" },
+  1188→        body: JSON.stringify({ action: "generate" }),
+  1189→      });
+  1190→      if (!res.ok) {
+  1191→        const err = await res.json().catch(() => null);
+  1192→        throw new Error(err?.error || "Failed");
+  1193→      }
+  1194→      const data = await res.json();
+  1195→      setGenerated(data.generated);
+  1196→      setMode("generated");
+  1197→      toast.success("Password generated");
+  1198→      await onSaved();
+  1199→    } catch (err: any) {
+  1200→      toast.error(err?.message || "Could not generate password");
+  1201→    } finally {
+  1202→      setGenerating(false);
+  1203→    }
+  1204→  }
+  1205→
+  1206→  function copyGenerated() {
+  1207→    if (!generated) return;
+  1208→    navigator.clipboard
+  1209→      .writeText(generated)
+  1210→      .then(() => toast.success("Copied to clipboard"))
+  1211→      .catch(() => toast.error("Copy failed"));
+  1212→  }
+  1213→
+  1214→  return (
+  1215→    <Card className="shadow-sm">
+  1216→      <CardHeader>
+  1217→        <div className="flex items-start justify-between gap-3">
+  1218→          <div>
+  1219→            <CardTitle className="text-lg flex items-center gap-2">
+  1220→              <Shield className="w-5 h-5 text-emerald-600" />
+  1221→              Backup Password
+  1222→            </CardTitle>
+  1223→            <CardDescription>
+  1224→              This password protects backup/restore and data removal operations.
+  1225→            </CardDescription>
+  1226→          </div>
+  1227→          {isSet ? (
+  1228→            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+  1229→              <ShieldCheck className="w-3 h-3" />
+  1230→              Set
+  1231→            </Badge>
+  1232→          ) : (
+  1233→            <Badge variant="outline" className="text-amber-700 border-amber-300">
+  1234→              Not Set
+  1235→            </Badge>
+  1236→          )}
+  1237→        </div>
+  1238→      </CardHeader>
+  1239→      <CardContent className="space-y-4">
+  1240→        {/* Generated password alert */}
+  1241→        {mode === "generated" && generated && (
+  1242→          <Alert className="border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30">
+  1243→            <KeyRound className="w-4 h-4 text-emerald-700" />
+  1244→            <AlertTitle className="text-emerald-800 dark:text-emerald-300">
+  1245→              Generated Backup Password
+  1246→            </AlertTitle>
+  1247→            <AlertDescription>
+  1248→              <div className="flex items-center gap-2 mt-1">
+  1249→                <code className="font-mono font-bold text-base tracking-wider bg-background px-2 py-1 rounded border">
+  1250→                  {generated}
+  1251→                </code>
+  1252→                <Button
+  1253→                  type="button"
+  1254→                  size="sm"
+  1255→                  variant="outline"
+  1256→                  className="h-8"
+  1257→                  onClick={copyGenerated}
+  1258→                >
+  1259→                  Copy
+  1260→                </Button>
+  1261→              </div>
+  1262→              <p className="text-xs mt-2">
+  1263→                Save this password somewhere safe. You will need it for backup,
+  1264→                restore, and remove-data operations.
+  1265→              </p>
+  1266→              <Button
+  1267→                type="button"
+  1268→                size="sm"
+  1269→                variant="ghost"
+  1270→                className="h-7 mt-2"
+  1271→                onClick={() => setMode("idle")}
+  1272→              >
+  1273→                Dismiss
+  1274→              </Button>
+  1275→            </AlertDescription>
+  1276→          </Alert>
+  1277→        )}
+  1278→
+  1279→        {/* If not set: show set + generate options */}
+  1280→        {!isSet && mode !== "generated" && (
+  1281→          <>
+  1282→            <div className="flex flex-wrap gap-2">
+  1283→              <Button
+  1284→                type="button"
+  1285→                variant={mode === "set" ? "default" : "outline"}
+  1286→                className={
+  1287→                  mode === "set"
+  1288→                    ? "h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+  1289→                    : "h-10 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+  1290→                }
+  1291→                onClick={() => setMode(mode === "set" ? "idle" : "set")}
+  1292→              >
+  1293→                <Key className="w-4 h-4" />
+  1294→                Set Backup Password
+  1295→              </Button>
+  1296→              <Button
+  1297→                type="button"
+  1298→                variant="outline"
+  1299→                className="h-10 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+  1300→                onClick={onGenerate}
+  1301→                disabled={generating}
+  1302→              >
+  1303→                {generating ? (
+  1304→                  <Loader2 className="w-4 h-4 animate-spin" />
+  1305→                ) : (
+  1306→                  <RefreshCw className="w-4 h-4" />
+  1307→                )}
+  1308→                Generate Password
+  1309→              </Button>
+  1310→            </div>
+  1311→            {mode === "set" && (
+  1312→              <form onSubmit={onSet} className="space-y-3 pt-2 border-t">
+  1313→                <div className="space-y-2">
+  1314→                  <Label htmlFor="bpNew" className="flex items-center gap-1.5">
+  1315→                    <Lock className="w-3.5 h-3.5 text-emerald-600" />
+  1316→                    New Backup Password
+  1317→                  </Label>
+  1318→                  <Input
+  1319→                    id="bpNew"
+  1320→                    type="password"
+  1321→                    value={newPassword}
+  1322→                    onChange={(e) => setNewPassword(e.target.value)}
+  1323→                    placeholder="At least 4 characters"
+  1324→                    dir="ltr"
+  1325→                    className="h-11"
+  1326→                    autoComplete="new-password"
+  1327→                  />
+  1328→                  {newPasswordError && (
+  1329→                    <p className="text-xs text-red-600">{newPasswordError}</p>
+  1330→                  )}
+  1331→                </div>
+  1332→                <div className="flex justify-end">
+  1333→                  <Button
+  1334→                    type="submit"
+  1335→                    disabled={saving || newPassword.length < 4}
+  1336→                    className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+  1337→                  >
+  1338→                    {saving ? (
+  1339→                      <Loader2 className="w-4 h-4 animate-spin" />
+  1340→                    ) : (
+  1341→                      <Save className="w-4 h-4" />
+  1342→                    )}
+  1343→                    Set Password
+  1344→                  </Button>
+  1345→                </div>
+  1346→              </form>
+  1347→            )}
+  1348→          </>
+  1349→        )}
+  1350→
+  1351→        {/* If set: show update option */}
+  1352→        {isSet && mode === "idle" && (
+  1353→          <>
+  1354→            <p className="text-sm text-muted-foreground">
+  1355→              A backup password is currently set. You can change it below —
+  1356→              you&apos;ll need to provide the current one.
+  1357→            </p>
+  1358→            <Button
+  1359→              type="button"
+  1360→              variant="outline"
+  1361→              className="h-10 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+  1362→              onClick={() => setMode("update")}
+  1363→            >
+  1364→              <Key className="w-4 h-4" />
+  1365→              Change Backup Password
+  1366→            </Button>
+  1367→          </>
+  1368→        )}
+  1369→
+  1370→        {isSet && mode === "update" && (
+  1371→          <form onSubmit={onUpdate} className="space-y-3 pt-2 border-t">
+  1372→            <div className="space-y-2">
+  1373→              <Label htmlFor="bpCur" className="flex items-center gap-1.5">
+  1374→                <Lock className="w-3.5 h-3.5 text-emerald-600" />
+  1375→                Current Backup Password
+  1376→              </Label>
+  1377→              <Input
+  1378→                id="bpCur"
+  1379→                type="password"
+  1380→                value={currentPassword}
+  1381→                onChange={(e) => setCurrentPassword(e.target.value)}
+  1382→                placeholder="Enter current backup password"
+  1383→                dir="ltr"
+  1384→                className="h-11"
+  1385→                autoComplete="current-password"
+  1386→              />
+  1387→            </div>
+  1388→            <div className="space-y-2">
+  1389→              <Label htmlFor="bpNewUpd" className="flex items-center gap-1.5">
+  1390→                <Key className="w-3.5 h-3.5 text-emerald-600" />
+  1391→                New Backup Password
+  1392→              </Label>
+  1393→              <Input
+  1394→                id="bpNewUpd"
+  1395→                type="password"
+  1396→                value={newPassword}
+  1397→                onChange={(e) => setNewPassword(e.target.value)}
+  1398→                placeholder="At least 4 characters"
+  1399→                dir="ltr"
+  1400→                className="h-11"
+  1401→                autoComplete="new-password"
+  1402→              />
+  1403→              {newPasswordError && (
+  1404→                <p className="text-xs text-red-600">{newPasswordError}</p>
+  1405→              )}
+  1406→            </div>
+  1407→            <div className="flex justify-end gap-2">
+  1408→              <Button
+  1409→                type="button"
+  1410→                variant="ghost"
+  1411→                className="h-10"
+  1412→                onClick={() => {
+  1413→                  setMode("idle");
+  1414→                  setNewPassword("");
+  1415→                  setCurrentPassword("");
+  1416→                }}
+  1417→              >
+  1418→                Cancel
+  1419→              </Button>
+  1420→              <Button
+  1421→                type="submit"
+  1422→                disabled={saving || newPassword.length < 4}
+  1423→                className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+  1424→              >
+  1425→                {saving ? (
+  1426→                  <Loader2 className="w-4 h-4 animate-spin" />
+  1427→                ) : (
+  1428→                  <Save className="w-4 h-4" />
+  1429→                )}
+  1430→                Update Password
+  1431→              </Button>
+  1432→            </div>
+  1433→          </form>
+  1434→        )}
+  1435→      </CardContent>
+  1436→    </Card>
+  1437→  );
+  1438→}
+  1439→
+  1440→// ============================================================
+  1441→// 7. Backup & Restore card
+  1442→// ============================================================
+  1443→function BackupRestoreCard() {
+  1444→  const [backups, setBackups] = React.useState<BackupFile[]>([]);
+  1445→  const [loadingList, setLoadingList] = React.useState(true);
+  1446→  const [creating, setCreating] = React.useState(false);
+  1447→
+  1448→  // Remove Data dialog state
+  1449→  const [removeOpen, setRemoveOpen] = React.useState(false);
+  1450→  const [removePwd, setRemovePwd] = React.useState("");
+  1451→  const [removing, setRemoving] = React.useState(false);
+  1452→
+  1453→  // Restore Data dialog state
+  1454→  const [restoreOpen, setRestoreOpen] = React.useState(false);
+  1455→  const [restoreBackup, setRestoreBackup] = React.useState<string>("");
+  1456→  const [restorePwd, setRestorePwd] = React.useState("");
+  1457→  const [restoring, setRestoring] = React.useState(false);
+  1458→
+  1459→  // Per-row Restore dialog state (data recovery)
+  1460→  const [rowRestore, setRowRestore] = React.useState<BackupFile | null>(null);
+  1461→  const [rowRestorePwd, setRowRestorePwd] = React.useState("");
+  1462→  const [rowRestoring, setRowRestoring] = React.useState(false);
+  1463→
+  1464→  const loadBackups = React.useCallback(async () => {
+  1465→    setLoadingList(true);
+  1466→    try {
+  1467→      const res = await fetch("/api/backup", { cache: "no-store" });
+  1468→      if (!res.ok) throw new Error("Failed");
+  1469→      const data = await res.json();
+  1470→      setBackups(data.backups || []);
+  1471→    } catch {
+  1472→      toast.error("Could not load backups");
+  1473→    } finally {
+  1474→      setLoadingList(false);
+  1475→    }
+  1476→  }, []);
+  1477→
+  1478→  React.useEffect(() => {
+  1479→    loadBackups();
+  1480→  }, [loadBackups]);
+  1481→
+  1482→  async function onCreate() {
+  1483→    if (creating) return;
+  1484→    setCreating(true);
+  1485→    try {
+  1486→      const res = await fetch("/api/backup", { method: "POST" });
+  1487→      if (!res.ok) {
+  1488→        const err = await res.json().catch(() => null);
+  1489→        throw new Error(err?.error || "Failed");
+  1490→      }
+  1491→      const data = await res.json();
+  1492→      toast.success(`Backup created: ${data.backup?.name || "OK"}`);
+  1493→      await loadBackups();
+  1494→    } catch (err: any) {
+  1495→      toast.error(err?.message || "Could not create backup");
+  1496→    } finally {
+  1497→      setCreating(false);
+  1498→    }
+  1499→  }
+  1500→
+  1501→  async function onRemoveData(e: React.MouseEvent) {
+  1502→    // Prevent AlertDialog from auto-closing; we close manually on success.
+  1503→    e.preventDefault();
+  1504→    if (removing) return;
+  1505→    if (!removePwd) {
+  1506→      toast.error("Enter your backup password");
+  1507→      return;
+  1508→    }
+  1509→    setRemoving(true);
+  1510→    try {
+  1511→      const res = await fetch("/api/backup/remove-data", {
+  1512→        method: "POST",
+  1513→        headers: { "Content-Type": "application/json" },
+  1514→        body: JSON.stringify({ password: removePwd }),
+  1515→      });
+  1516→      if (!res.ok) {
+  1517→        const err = await res.json().catch(() => null);
+  1518→        throw new Error(err?.error || "Failed");
+  1519→      }
+  1520→      toast.success(
+  1521→        "Transactional data removed. Products and cards preserved."
+  1522→      );
+  1523→      setRemoveOpen(false);
+  1524→      setRemovePwd("");
+  1525→    } catch (err: any) {
+  1526→      toast.error(err?.message || "Could not remove data");
+  1527→    } finally {
+  1528→      setRemoving(false);
+  1529→    }
+  1530→  }
+  1531→
+  1532→  async function callRestore(backupName: string, pwd: string) {
+  1533→    const res = await fetch("/api/backup/restore", {
+  1534→      method: "POST",
+  1535→      headers: { "Content-Type": "application/json" },
+  1536→      body: JSON.stringify({ password: pwd, backupName }),
+  1537→    });
+  1538→    if (!res.ok) {
+  1539→      const err = await res.json().catch(() => null);
+  1540→      throw new Error(err?.error || "Restore failed");
+  1541→    }
+  1542→    return res.json();
+  1543→  }
+  1544→
+  1545→  async function onRestoreData() {
+  1546→    if (restoring) return;
+  1547→    if (!restoreBackup) {
+  1548→      toast.error("Select a backup");
+  1549→      return;
+  1550→    }
+  1551→    if (!restorePwd) {
+  1552→      toast.error("Enter your backup password");
+  1553→      return;
+  1554→    }
+  1555→    setRestoring(true);
+  1556→    try {
+  1557→      await callRestore(restoreBackup, restorePwd);
+  1558→      toast.success("Database restored. Please restart the app.");
+  1559→      setRestoreOpen(false);
+  1560→      setRestoreBackup("");
+  1561→      setRestorePwd("");
+  1562→    } catch (err: any) {
+  1563→      toast.error(err?.message || "Could not restore");
+  1564→    } finally {
+  1565→      setRestoring(false);
+  1566→    }
+  1567→  }
+  1568→
+  1569→  async function onRowRestore() {
+  1570→    if (rowRestoring || !rowRestore) return;
+  1571→    if (!rowRestorePwd) {
+  1572→      toast.error("Enter your backup password");
+  1573→      return;
+  1574→    }
+  1575→    setRowRestoring(true);
+  1576→    try {
+  1577→      await callRestore(rowRestore.name, rowRestorePwd);
+  1578→      toast.success("Database restored. Please restart the app.");
+  1579→      setRowRestore(null);
+  1580→      setRowRestorePwd("");
+  1581→    } catch (err: any) {
+  1582→      toast.error(err?.message || "Could not restore");
+  1583→    } finally {
+  1584→      setRowRestoring(false);
+  1585→    }
+  1586→  }
+  1587→
+  1588→  return (
+  1589→    <Card className="shadow-sm">
+  1590→      <CardHeader>
+  1591→        <CardTitle className="text-lg flex items-center gap-2">
+  1592→          <Database className="w-5 h-5 text-emerald-600" />
+  1593→          Backup &amp; Restore
+  1594→        </CardTitle>
+  1595→        <CardDescription>
+  1596→          Create database backups, restore from a previous backup, or remove
+  1597→          transactional data. All operations require the backup password.
+  1598→        </CardDescription>
+  1599→      </CardHeader>
+  1600→      <CardContent className="space-y-5">
+  1601→        {/* Action buttons */}
+  1602→        <div className="flex flex-wrap gap-2">
+  1603→          <Button
+  1604→            type="button"
+  1605→            onClick={onCreate}
+  1606→            disabled={creating}
+  1607→            className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+  1608→          >
+  1609→            {creating ? (
+  1610→              <Loader2 className="w-4 h-4 animate-spin" />
+  1611→            ) : (
+  1612→              <Download className="w-4 h-4" />
+  1613→            )}
+  1614→            Create Backup Now
+  1615→          </Button>
+  1616→
+  1617→          {/* Restore Data dialog */}
+  1618→          <Dialog open={restoreOpen} onOpenChange={setRestoreOpen}>
+  1619→            <DialogTrigger asChild>
+  1620→              <Button
+  1621→                type="button"
+  1622→                variant="outline"
+  1623→                className="h-10 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+  1624→                disabled={backups.length === 0}
+  1625→              >
+  1626→                <Upload className="w-4 h-4" />
+  1627→                Restore Data
+  1628→              </Button>
+  1629→            </DialogTrigger>
+  1630→            <DialogContent>
+  1631→              <DialogHeader>
+  1632→                <DialogTitle>Restore Database</DialogTitle>
+  1633→                <DialogDescription>
+  1634→                  Select a backup to restore. The current database will be
+  1635→                  replaced. A safety backup of the current DB is created
+  1636→                  automatically before restore.
+  1637→                </DialogDescription>
+  1638→              </DialogHeader>
+  1639→              <div className="space-y-3">
+  1640→                <div className="space-y-2">
+  1641→                  <Label
+  1642→                    htmlFor="restoreSelect"
+  1643→                    className="flex items-center gap-1.5"
+  1644→                  >
+  1645→                    <Database className="w-3.5 h-3.5 text-emerald-600" />
+  1646→                    Backup File
+  1647→                  </Label>
+  1648→                  <select
+  1649→                    id="restoreSelect"
+  1650→                    value={restoreBackup}
+  1651→                    onChange={(e) => setRestoreBackup(e.target.value)}
+  1652→                    className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+  1653→                  >
+  1654→                    <option value="">— Select a backup —</option>
+  1655→                    {backups.map((b) => (
+  1656→                      <option key={b.name} value={b.name}>
+  1657→                        {b.name} ({formatBytes(b.size)}, {formatDate(b.mtime)})
+  1658→                      </option>
+  1659→                    ))}
+  1660→                  </select>
+  1661→                </div>
+  1662→                <div className="space-y-2">
+  1663→                  <Label
+  1664→                    htmlFor="restorePwd"
+  1665→                    className="flex items-center gap-1.5"
+  1666→                  >
+  1667→                    <Lock className="w-3.5 h-3.5 text-emerald-600" />
+  1668→                    Backup Password
+  1669→                  </Label>
+  1670→                  <Input
+  1671→                    id="restorePwd"
+  1672→                    type="password"
+  1673→                    value={restorePwd}
+  1674→                    onChange={(e) => setRestorePwd(e.target.value)}
+  1675→                    placeholder="Enter backup password"
+  1676→                    dir="ltr"
+  1677→                    className="h-11"
+  1678→                    autoComplete="off"
+  1679→                  />
+  1680→                </div>
+  1681→              </div>
+  1682→              <DialogFooter>
+  1683→                <Button
+  1684→                  type="button"
+  1685→                  variant="outline"
+  1686→                  onClick={() => setRestoreOpen(false)}
+  1687→                  disabled={restoring}
+  1688→                >
+  1689→                  Cancel
+  1690→                </Button>
+  1691→                <Button
+  1692→                  type="button"
+  1693→                  onClick={onRestoreData}
+  1694→                  disabled={restoring || !restoreBackup || !restorePwd}
+  1695→                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+  1696→                >
+  1697→                  {restoring ? (
+  1698→                    <Loader2 className="w-4 h-4 animate-spin" />
+  1699→                  ) : (
+  1700→                    <Upload className="w-4 h-4" />
+  1701→                  )}
+  1702→                  Restore
+  1703→                </Button>
+  1704→              </DialogFooter>
+  1705→            </DialogContent>
+  1706→          </Dialog>
+  1707→
+  1708→          {/* Remove Data alert dialog */}
+  1709→          <AlertDialog open={removeOpen} onOpenChange={setRemoveOpen}>
+  1710→            <AlertDialogTrigger asChild>
+  1711→              <Button
+  1712→                type="button"
+  1713→                variant="outline"
+  1714→                className="h-10 text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
+  1715→              >
+  1716→                <Trash2 className="w-4 h-4" />
+  1717→                Remove Data
+  1718→              </Button>
+  1719→            </AlertDialogTrigger>
+  1720→            <AlertDialogContent>
+  1721→              <AlertDialogHeader>
+  1722→                <AlertDialogTitle className="text-red-700">
+  1723→                  Remove all transactional data?
+  1724→                </AlertDialogTitle>
+  1725→                <AlertDialogDescription>
+  1726→                  This will DELETE all sales, transactions, and reports.
+  1727→                  Products and customer cards will be KEPT. This action cannot
+  1728→                  be undone. Enter your backup password to confirm.
+  1729→                </AlertDialogDescription>
+  1730→              </AlertDialogHeader>
+  1731→              <div className="space-y-2">
+  1732→                <Label htmlFor="rmPwd" className="flex items-center gap-1.5">
+  1733→                  <Lock className="w-3.5 h-3.5 text-red-600" />
+  1734→                  Backup Password
+  1735→                </Label>
+  1736→                <Input
+  1737→                  id="rmPwd"
+  1738→                  type="password"
+  1739→                  value={removePwd}
+  1740→                  onChange={(e) => setRemovePwd(e.target.value)}
+  1741→                  placeholder="Enter backup password"
+  1742→                  dir="ltr"
+  1743→                  className="h-11"
+  1744→                  autoComplete="off"
+  1745→                />
+  1746→              </div>
+  1747→              <AlertDialogFooter>
+  1748→                <AlertDialogCancel disabled={removing}>
+  1749→                  Cancel
+  1750→                </AlertDialogCancel>
+  1751→                <AlertDialogAction
+  1752→                  onClick={onRemoveData}
+  1753→                  disabled={removing || !removePwd}
+  1754→                  className="bg-red-600 hover:bg-red-700 text-white"
+  1755→                >
+  1756→                  {removing ? (
+  1757→                    <Loader2 className="w-4 h-4 animate-spin" />
+  1758→                  ) : (
+  1759→                    <Trash2 className="w-4 h-4" />
+  1760→                  )}
+  1761→                  Remove Data
+  1762→                </AlertDialogAction>
+  1763→              </AlertDialogFooter>
+  1764→            </AlertDialogContent>
+  1765→          </AlertDialog>
+  1766→        </div>
+  1767→
+  1768→        <Separator />
+  1769→
+  1770→        {/* Backups list */}
+  1771→        <div className="space-y-2">
+  1772→          <div className="flex items-center justify-between">
+  1773→            <h3 className="font-semibold text-sm flex items-center gap-2">
+  1774→              <Database className="w-4 h-4 text-emerald-600" />
+  1775→              Existing Backups
+  1776→            </h3>
+  1777→            <Button
+  1778→              type="button"
+  1779→              variant="ghost"
+  1780→              size="sm"
+  1781→              className="h-8"
+  1782→              onClick={loadBackups}
+  1783→              disabled={loadingList}
+  1784→            >
+  1785→              <RefreshCw
+  1786→                className={`w-3.5 h-3.5 ${loadingList ? "animate-spin" : ""}`}
+  1787→              />
+  1788→              Refresh
+  1789→            </Button>
+  1790→          </div>
+  1791→          {loadingList ? (
+  1792→            <div className="space-y-2">
+  1793→              {Array.from({ length: 3 }).map((_, i) => (
+  1794→                <Skeleton key={i} className="h-14 w-full rounded-lg" />
+  1795→              ))}
+  1796→            </div>
+  1797→          ) : backups.length === 0 ? (
+  1798→            <div className="text-center py-8 text-sm text-muted-foreground rounded-lg border border-dashed">
+  1799→              <Database className="w-8 h-8 mx-auto mb-2 opacity-50" />
+  1800→              No backups yet. Click &quot;Create Backup Now&quot; to make one.
+  1801→            </div>
+  1802→          ) : (
+  1803→            <div className="max-h-96 overflow-y-auto rounded-lg border divide-y">
+  1804→              {backups.map((b) => (
+  1805→                <div
+  1806→                  key={b.name}
+  1807→                  className="flex items-center gap-3 p-3 hover:bg-muted/40"
+  1808→                >
+  1809→                  <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
+  1810→                    <Database className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
+  1811→                  </div>
+  1812→                  <div className="flex-1 min-w-0">
+  1813→                    <div className="text-sm font-medium truncate font-mono">
+  1814→                      {b.name}
+  1815→                    </div>
+  1816→                    <div className="text-xs text-muted-foreground">
+  1817→                      {formatBytes(b.size)} • {formatDate(b.mtime)}
+  1818→                    </div>
+  1819→                  </div>
+  1820→                  {/* Per-row Restore — data recovery */}
+  1821→                  <Dialog
+  1822→                    open={rowRestore?.name === b.name}
+  1823→                    onOpenChange={(open) => {
+  1824→                      if (!open) {
+  1825→                        setRowRestore(null);
+  1826→                        setRowRestorePwd("");
+  1827→                      }
+  1828→                    }}
+  1829→                  >
+  1830→                    <DialogTrigger asChild>
+  1831→                      <Button
+  1832→                        type="button"
+  1833→                        size="sm"
+  1834→                        variant="outline"
+  1835→                        className="h-8 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+  1836→                        onClick={() => {
+  1837→                          setRowRestore(b);
+  1838→                          setRowRestorePwd("");
+  1839→                        }}
+  1840→                      >
+  1841→                        <Upload className="w-3.5 h-3.5" />
+  1842→                        Restore
+  1843→                      </Button>
+  1844→                    </DialogTrigger>
+  1845→                    <DialogContent>
+  1846→                      <DialogHeader>
+  1847→                        <DialogTitle>Restore from {b.name}?</DialogTitle>
+  1848→                        <DialogDescription>
+  1849→                          The current database will be replaced with this
+  1850→                          backup. A safety backup of the current DB is created
+  1851→                          automatically before restore. Enter your backup
+  1852→                          password to confirm.
+  1853→                        </DialogDescription>
+  1854→                      </DialogHeader>
+  1855→                      <div className="space-y-2">
+  1856→                        <Label
+  1857→                          htmlFor="rowRestorePwd"
+  1858→                          className="flex items-center gap-1.5"
+  1859→                        >
+  1860→                          <Lock className="w-3.5 h-3.5 text-emerald-600" />
+  1861→                          Backup Password
+  1862→                        </Label>
+  1863→                        <Input
+  1864→                          id="rowRestorePwd"
+  1865→                          type="password"
+  1866→                          value={rowRestorePwd}
+  1867→                          onChange={(e) => setRowRestorePwd(e.target.value)}
+  1868→                          placeholder="Enter backup password"
+  1869→                          dir="ltr"
+  1870→                          className="h-11"
+  1871→                          autoComplete="off"
+  1872→                        />
+  1873→                      </div>
+  1874→                      <DialogFooter>
+  1875→                        <Button
+  1876→                          type="button"
+  1877→                          variant="outline"
+  1878→                          onClick={() => {
+  1879→                            setRowRestore(null);
+  1880→                            setRowRestorePwd("");
+  1881→                          }}
+  1882→                          disabled={rowRestoring}
+  1883→                        >
+  1884→                          Cancel
+  1885→                        </Button>
+  1886→                        <Button
+  1887→                          type="button"
+  1888→                          onClick={onRowRestore}
+  1889→                          disabled={rowRestoring || !rowRestorePwd}
+  1890→                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+  1891→                        >
+  1892→                          {rowRestoring ? (
+  1893→                            <Loader2 className="w-4 h-4 animate-spin" />
+  1894→                          ) : (
+  1895→                            <Upload className="w-4 h-4" />
+  1896→                          )}
+  1897→                          Restore
+  1898→                        </Button>
+  1899→                      </DialogFooter>
+  1900→                    </DialogContent>
+  1901→                  </Dialog>
+  1902→                </div>
+  1903→              ))}
+  1904→            </div>
+  1905→          )}
+  1906→        </div>
+  1907→      </CardContent>
+  1908→    </Card>
+  1909→  );
+  1910→}
+  1911→
+  1912→// ============================================================
+  1913→// 8. Barcode Scanner card
+  1914→// ============================================================
+  1915→function ScannerCard() {
+  1916→  const setView = useAppStore((s) => s.setView);
+  1917→  return (
+  1918→    <Card className="shadow-sm">
+  1919→      <CardHeader>
+  1920→        <CardTitle className="text-lg flex items-center gap-2">
+  1921→          <ScanBarcode className="w-5 h-5 text-emerald-600" />
+  1922→          Barcode Scanner
+  1923→        </CardTitle>
+  1924→        <CardDescription>
+  1925→          Open the camera barcode scanner. Scanned products are added to the
+  1926→          cart automatically.
+  1927→        </CardDescription>
+  1928→      </CardHeader>
+  1929→      <CardContent>
+  1930→        <div className="flex items-center justify-between gap-3 flex-wrap">
+  1931→          <p className="text-sm text-muted-foreground flex-1 min-w-[200px]">
+  1932→            Use this to scan product barcodes with your device camera, or enter
+  1933→            them manually.
+  1934→          </p>
+  1935→          <Button
+  1936→            type="button"
+  1937→            onClick={() => setView("scanner")}
+  1938→            className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white"
+  1939→          >
+  1940→            <ScanBarcode className="w-4 h-4" />
+  1941→            Open Scanner
+  1942→          </Button>
+  1943→        </div>
+  1944→      </CardContent>
+  1945→    </Card>
+  1946→  );
+  1947→}
+  1948→
