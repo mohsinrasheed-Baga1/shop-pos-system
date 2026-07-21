@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useBarcodeScanner } from "@/hooks/use-barcode-scanner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -49,6 +50,7 @@ export function PosView({ settings }: PosViewProps) {
   const [checkoutOpen, setCheckoutOpen] = React.useState(false);
   const [paidAmount, setPaidAmount] = React.useState("");
   const [lastSale, setLastSale] = React.useState<any>(null);
+  const [scannedCard, setScannedCard] = React.useState<any>(null);
   const [receiptOpen, setReceiptOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
 
@@ -103,6 +105,31 @@ export function PosView({ settings }: PosViewProps) {
     }
     cart.addItem(product, 1);
   }
+
+  // Handle scanned barcode — look up product/card and take action
+  async function handleScannedCode(code: string) {
+    try {
+      const res = await fetch(`/api/barcode?code=${encodeURIComponent(code)}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (data.found && data.kind === "product" && data.product) {
+        addToCart(data.product as Product);
+        toast.success(`Scanned: ${data.product.name}`);
+      } else if (data.found && data.kind === "card" && data.card) {
+        toast.success(`Shop Card: ${data.card.name} — ${data.card.type === "WHOLESALE" ? "Wholesale" : "Regular"} mode`);
+        // set sale type based on card type
+        cart.setSaleType(data.card.type === "WHOLESALE" ? "WHOLESALE" : "RETAIL");
+        setScannedCard(data.card);
+      } else {
+        toast.warning(`Unknown barcode: ${code}`);
+      }
+    } catch {
+      toast.error("Scan lookup failed");
+    }
+  }
+
+  useBarcodeScanner(handleScannedCode);
 
   async function handleCheckout() {
     if (cart.items.length === 0) {
