@@ -15,6 +15,8 @@ import {
   Banknote,
   CreditCard,
   Smartphone,
+  RotateCcw,
+  Calculator,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +27,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -53,6 +56,8 @@ export function PosView({ settings }: PosViewProps) {
   const [scannedCard, setScannedCard] = React.useState<any>(null);
   const [receiptOpen, setReceiptOpen] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
+  const [returnOpen, setReturnOpen] = React.useState(false);
+  const [calcOpen, setCalcOpen] = React.useState(false);
 
   const cart = useCartStore();
   const { setView } = useAppStore();
@@ -228,6 +233,20 @@ export function PosView({ settings }: PosViewProps) {
             className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
           >
             <ScanBarcode className="w-4 h-4 mr-2" /> Scanner
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setReturnOpen(true)}
+            className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+          >
+            <RotateCcw className="w-4 h-4 mr-2" /> Return
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setCalcOpen(true)}
+            className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+          >
+            <Calculator className="w-4 h-4 mr-2" /> Calculator
           </Button>
         </div>
       </div>
@@ -659,6 +678,507 @@ export function PosView({ settings }: PosViewProps) {
         open={receiptOpen}
         onOpenChange={setReceiptOpen}
       />
+
+      {/* Return / Refund dialog */}
+      <ReturnDialog
+        open={returnOpen}
+        onOpenChange={setReturnOpen}
+        currency={currency}
+        onReturned={() => loadProducts()}
+      />
+
+      {/* Calculator dialog */}
+      <CalculatorDialog open={calcOpen} onOpenChange={setCalcOpen} />
     </div>
+  );
+}
+
+/* ----------------------------- Return Dialog ----------------------------- */
+
+interface ReturnDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  currency: string;
+  onReturned?: () => void;
+}
+
+function ReturnDialog({
+  open,
+  onOpenChange,
+  currency,
+  onReturned,
+}: ReturnDialogProps) {
+  const [invoiceNo, setInvoiceNo] = React.useState("");
+  const [searching, setSearching] = React.useState(false);
+  const [sale, setSale] = React.useState<any>(null);
+  const [notFound, setNotFound] = React.useState(false);
+  const [returning, setReturning] = React.useState(false);
+
+  function reset() {
+    setInvoiceNo("");
+    setSale(null);
+    setNotFound(false);
+    setSearching(false);
+    setReturning(false);
+  }
+
+  React.useEffect(() => {
+    if (!open) {
+      const t = setTimeout(reset, 200);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
+
+  async function findSale() {
+    const q = invoiceNo.trim();
+    if (!q) {
+      toast.error("Enter an invoice number");
+      return;
+    }
+    setSearching(true);
+    setSale(null);
+    setNotFound(false);
+    try {
+      const res = await fetch(
+        `/api/sales?q=${encodeURIComponent(q)}`,
+        { cache: "no-store" }
+      );
+      const data = await res.json();
+      const list: any[] = data.sales || [];
+      const needle = q.toLowerCase();
+      const match =
+        list.find((s) => s.invoiceNo === q) ||
+        list.find((s) => s.invoiceNo?.toLowerCase() === needle) ||
+        list.find((s) => s.invoiceNo?.toLowerCase().includes(needle));
+      if (match) {
+        setSale(match);
+      } else {
+        setNotFound(true);
+      }
+    } catch {
+      toast.error("Failed to search sales");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function returnAll() {
+    if (!sale) return;
+    setReturning(true);
+    try {
+      const res = await fetch(`/api/sales/${sale.id}/return`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: "POS return" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const msg = (data.error || "").toLowerCase();
+        if (msg.includes("already")) {
+          toast.error("This sale has already been returned");
+          // refresh sale state to reflect RETURNED
+          setSale({ ...sale, status: "RETURNED" });
+        } else {
+          toast.error(data.error || "Return failed");
+        }
+        setReturning(false);
+        return;
+      }
+      toast.success("Sale returned successfully. Items restocked.");
+      onReturned?.();
+      onOpenChange(false);
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setReturning(false);
+    }
+  }
+
+  const alreadyReturned = sale?.status === "RETURNED";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Return / Refund Sale</DialogTitle>
+          <DialogDescription>
+            Scan the receipt barcode OR enter the invoice number
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="return-invoice">
+              Invoice Number or Scan Receipt Barcode
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="return-invoice"
+                data-barcode-input="true"
+                placeholder="e.g. INV-20250115-0001"
+                value={invoiceNo}
+                onChange={(e) => setInvoiceNo(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") findSale();
+                }}
+                autoFocus
+              />
+              <Button
+                onClick={findSale}
+                disabled={searching}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {searching ? "Searching..." : "Find Sale"}
+              </Button>
+            </div>
+          </div>
+
+          {notFound && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              No sale found with this invoice number
+            </div>
+          )}
+
+          {sale && (
+            <div className="space-y-3">
+              {alreadyReturned && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                  This sale has already been returned
+                </div>
+              )}
+              <div className="rounded-lg border p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xs text-muted-foreground">Invoice</div>
+                    <div className="font-semibold">{sale.invoiceNo}</div>
+                  </div>
+                  <Badge variant={alreadyReturned ? "destructive" : "secondary"}>
+                    {sale.status}
+                  </Badge>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {new Date(sale.createdAt).toLocaleString()}
+                </div>
+                {sale.customerName && (
+                  <div className="text-sm">
+                    Customer: {sale.customerName}
+                  </div>
+                )}
+                {sale.paymentMethod && (
+                  <div className="text-xs text-muted-foreground">
+                    Payment: {sale.paymentMethod}
+                  </div>
+                )}
+                <Separator />
+                <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+                  {(sale.items || []).map((it: any) => (
+                    <div
+                      key={it.id}
+                      className="flex items-center justify-between text-sm gap-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="truncate">{it.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {it.quantity} {unitLabel(it.unit)} ×{" "}
+                          {formatMoney(it.price, currency)}
+                        </div>
+                      </div>
+                      <div className="font-medium whitespace-nowrap">
+                        {formatMoney(it.lineTotal, currency)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Separator />
+                <div className="flex justify-between font-bold">
+                  <span>Total</span>
+                  <span className="text-emerald-700">
+                    {formatMoney(sale.total, currency)}
+                  </span>
+                </div>
+              </div>
+              <Button
+                className="w-full bg-emerald-600 hover:bg-emerald-700"
+                onClick={returnAll}
+                disabled={returning || alreadyReturned}
+              >
+                {returning ? "Processing..." : "Return All Items"}
+              </Button>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={returning || searching}
+          >
+            Cancel
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* --------------------------- Calculator Dialog --------------------------- */
+
+interface CalculatorDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function CalculatorDialog({ open, onOpenChange }: CalculatorDialogProps) {
+  const [display, setDisplay] = React.useState("0");
+  const [previousValue, setPreviousValue] = React.useState<number | null>(null);
+  const [operation, setOperation] = React.useState<string | null>(null);
+  const [waitingForOperand, setWaitingForOperand] = React.useState(false);
+
+  function reset() {
+    setDisplay("0");
+    setPreviousValue(null);
+    setOperation(null);
+    setWaitingForOperand(false);
+  }
+
+  React.useEffect(() => {
+    if (!open) {
+      const t = setTimeout(reset, 200);
+      return () => clearTimeout(t);
+    }
+  }, [open]);
+
+  function inputDigit(d: string) {
+    if (waitingForOperand) {
+      setDisplay(d);
+      setWaitingForOperand(false);
+    } else {
+      setDisplay(display === "0" ? d : display + d);
+    }
+  }
+
+  function inputDecimal() {
+    if (waitingForOperand) {
+      setDisplay("0.");
+      setWaitingForOperand(false);
+      return;
+    }
+    if (!display.includes(".")) {
+      setDisplay(display + ".");
+    }
+  }
+
+  function clearAll() {
+    reset();
+  }
+
+  function backspace() {
+    if (
+      display.length === 1 ||
+      (display.length === 2 && display.startsWith("-"))
+    ) {
+      setDisplay("0");
+    } else {
+      setDisplay(display.slice(0, -1));
+    }
+  }
+
+  function compute(a: number, b: number, op: string): number {
+    switch (op) {
+      case "+":
+        return a + b;
+      case "-":
+        return a - b;
+      case "*":
+        return a * b;
+      case "/":
+        return b === 0 ? NaN : a / b;
+      default:
+        return b;
+    }
+  }
+
+  function performOperation(nextOp: string) {
+    const current = parseFloat(display);
+    if (previousValue === null) {
+      setPreviousValue(current);
+    } else if (operation && !waitingForOperand) {
+      const result = compute(previousValue, current, operation);
+      setDisplay(Number.isFinite(result) ? String(result) : "Error");
+      setPreviousValue(Number.isFinite(result) ? result : null);
+    }
+    setWaitingForOperand(true);
+    setOperation(nextOp);
+  }
+
+  function calculate() {
+    if (operation === null || previousValue === null) return;
+    const current = parseFloat(display);
+    const result = compute(previousValue, current, operation);
+    setDisplay(Number.isFinite(result) ? String(result) : "Error");
+    setPreviousValue(null);
+    setOperation(null);
+    setWaitingForOperand(true);
+  }
+
+  const btnBase = "h-12 text-xl font-medium";
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xs">
+        <DialogHeader>
+          <DialogTitle>Calculator</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="bg-muted rounded-lg p-4 text-right">
+            <div className="text-xs text-muted-foreground h-4 truncate">
+              {previousValue !== null && operation
+                ? `${previousValue} ${operation}`
+                : ""}
+            </div>
+            <div className="text-3xl font-mono font-bold tracking-tight truncate">
+              {display}
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={clearAll}
+            >
+              C
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={backspace}
+            >
+              ⌫
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => performOperation("/")}
+            >
+              /
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => performOperation("*")}
+            >
+              *
+            </Button>
+
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => inputDigit("7")}
+            >
+              7
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => inputDigit("8")}
+            >
+              8
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => inputDigit("9")}
+            >
+              9
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => performOperation("-")}
+            >
+              -
+            </Button>
+
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => inputDigit("4")}
+            >
+              4
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => inputDigit("5")}
+            >
+              5
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => inputDigit("6")}
+            >
+              6
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => performOperation("+")}
+            >
+              +
+            </Button>
+
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => inputDigit("1")}
+            >
+              1
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => inputDigit("2")}
+            >
+              2
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={() => inputDigit("3")}
+            >
+              3
+            </Button>
+            <Button
+              className={`${btnBase} row-span-2 bg-emerald-600 hover:bg-emerald-700 text-white`}
+              onClick={calculate}
+            >
+              =
+            </Button>
+
+            <Button
+              variant="outline"
+              className={`${btnBase} col-span-2`}
+              onClick={() => inputDigit("0")}
+            >
+              0
+            </Button>
+            <Button
+              variant="outline"
+              className={btnBase}
+              onClick={inputDecimal}
+            >
+              .
+            </Button>
+          </div>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => onOpenChange(false)}
+          >
+            Close
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
