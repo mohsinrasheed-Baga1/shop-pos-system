@@ -2,9 +2,18 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("posElectron", {
-  version: "1.0.0",
+  version: "2.6.0",
   platform: process.platform,
-  // Open a folder in the OS file explorer (used by Multi-Computer Sharing
-  // to reveal the local data folder so the user can share it on the LAN).
+  // Open a folder in the OS file explorer (used by Multi-Computer Sharing)
   openPath: (p) => ipcRenderer.invoke("pos:open-path", p),
+
+  // Google Drive Cloud Backup API
+  googleDrive: {
+    connect: () => ipcRenderer.invoke("gdrive:connect"),
+    disconnect: () => ipcRenderer.invoke("gdrive:disconnect"),
+    status: () => ipcRenderer.invoke("gdrive:status"),
+    backup: () => ipcRenderer.invoke("gdrive:backup"),
+    listBackups: () => ipcRenderer.invoke("gdrive:listBackups"),
+    restore: (fileId) => ipcRenderer.invoke("gdrive:restore", fileId),
+  },
 });

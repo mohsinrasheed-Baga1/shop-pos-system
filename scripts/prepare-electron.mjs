@@ -50,6 +50,14 @@ try {
   process.exit(1);
 }
 
+// Copy Google OAuth config + electron google-drive module
+console.log("[prepare-electron] Copying Google OAuth config...");
+const oauthConfigSrc = join(root, "google-oauth.config.json");
+if (existsSync(oauthConfigSrc)) {
+  cpSync(oauthConfigSrc, join(serverDest, "google-oauth.config.json"));
+  console.log("[prepare-electron] google-oauth.config.json copied");
+}
+
 // Verify
 const checks = [
   join(serverDest, "server.js"),

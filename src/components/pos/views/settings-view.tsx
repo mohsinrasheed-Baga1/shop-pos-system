@@ -78,6 +78,9 @@ import {
   DownloadCloud,
   ExternalLink,
   Package,
+  CloudOff,
+  List,
+  Clock,
 } from "lucide-react";
 import type { Settings } from "@/types";
 import { useAppStore } from "@/stores/use-pos-store";
@@ -85,7 +88,7 @@ import { useAppStore } from "@/stores/use-pos-store";
 // ============================================================
 // In-app auto-update constants
 // ============================================================
-const CURRENT_VERSION = "2.5.0";
+const CURRENT_VERSION = "2.6.0";
 const UPDATE_URL =
   "https://raw.githubusercontent.com/mohsinrasheed-Baga1/shop-pos-system/main/public/update.json";
 // The installer is split into 11 parts (~20 MB each) on the repo dist/ folder.
@@ -373,7 +376,7 @@ export function SettingsView() {
       <SoftwareUpdatesCard />
 
       {/* 10. Google Drive Backup card */}
-      <GoogleDriveCard settings={settings} onSave={savePartial} />
+      <CloudBackupCard />
 
       {/* 11. Barcode Scanner card */}
       <ScannerCard />
@@ -3115,337 +3118,359 @@ function SoftwareUpdatesCard() {
   );
 }
 
-// ============================================================
-// 10. Google Drive Backup card
-// ============================================================
-interface GoogleDriveCardProps {
-  settings: Settings;
-  onSave: (partial: Partial<Settings>) => Promise<Settings>;
-}
 
-function GoogleDriveCard({ settings, onSave }: GoogleDriveCardProps) {
-  const isConnected = !!(
-    settings.googleClientId &&
-    settings.googleClientSecret &&
-    settings.googleRefreshToken
-  );
-  const [form, setForm] = React.useState({
-    googleClientId: settings.googleClientId ?? "",
-    googleClientSecret: settings.googleClientSecret ?? "",
-    googleRefreshToken: settings.googleRefreshToken ?? "",
-  });
-  const [saving, setSaving] = React.useState(false);
-  const [backing, setBacking] = React.useState(false);
-  const [showSecrets, setShowSecrets] = React.useState(false);
+
+// ============================================================
+// 10. Cloud Backup (Google Drive) — Production Ready
+// ============================================================
+function CloudBackupCard() {
+  const [status, setStatus] = React.useState<any>(null);
+  const [backups, setBackups] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [action, setAction] = React.useState<string>("");
+  const [restoreTarget, setRestoreTarget] = React.useState<any>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const refresh = React.useCallback(async () => {
+    if (typeof window === "undefined" || !window.posElectron?.googleDrive) return;
+    try {
+      const s = await window.posElectron.googleDrive.status();
+      setStatus(s);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  }, []);
 
   React.useEffect(() => {
-    setForm({
-      googleClientId: settings.googleClientId ?? "",
-      googleClientSecret: settings.googleClientSecret ?? "",
-      googleRefreshToken: settings.googleRefreshToken ?? "",
-    });
-  }, [settings]);
+    refresh();
+    const t = setInterval(refresh, 30000);
+    return () => clearInterval(t);
+  }, [refresh]);
 
-  const dirty =
-    form.googleClientId !== (settings.googleClientId ?? "") ||
-    form.googleClientSecret !== (settings.googleClientSecret ?? "") ||
-    form.googleRefreshToken !== (settings.googleRefreshToken ?? "");
+  const isElectron = typeof window !== "undefined" && window.posElectron?.googleDrive;
+  const connected = status?.connected;
 
-  async function onSaveToken(e: React.FormEvent) {
-    e.preventDefault();
-    if (saving) return;
-    setSaving(true);
+  async function handleConnect() {
+    setError(null);
+    setLoading(true);
+    setAction("connect");
     try {
-      await onSave({
-        googleClientId: form.googleClientId.trim(),
-        googleClientSecret: form.googleClientSecret.trim(),
-        googleRefreshToken: form.googleRefreshToken.trim(),
-      });
-      toast.success("Google Drive credentials saved");
-    } catch (err: any) {
-      toast.error(err?.message || "Save failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function onDisconnect() {
-    if (saving) return;
-    setSaving(true);
-    try {
-      await onSave({
-        googleClientId: "",
-        googleClientSecret: "",
-        googleRefreshToken: "",
-      });
-      setForm({
-        googleClientId: "",
-        googleClientSecret: "",
-        googleRefreshToken: "",
-      });
-      toast.success("Google Drive disconnected");
-    } catch (err: any) {
-      toast.error(err?.message || "Disconnect failed");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function onBackupNow() {
-    if (backing) return;
-    setBacking(true);
-    try {
-      const res = await fetch("/api/backup/google-drive", { method: "POST" });
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(data?.error || "Backup failed");
+      const res = await window.posElectron.googleDrive.connect();
+      if (res.ok) {
+        toast.success("Google Drive connected!");
+        refresh();
+      } else {
+        setError(res.error || "Connection failed");
+        toast.error(res.error || "Connection failed");
       }
-      toast.success(
-        `Backup uploaded to Google Drive${
-          data?.fileName ? `: ${data.fileName}` : ""
-        }`
-      );
-    } catch (err: any) {
-      toast.error(err?.message || "Backup failed");
+    } catch (e: any) {
+      setError(e.message);
+      toast.error(e.message);
     } finally {
-      setBacking(false);
+      setLoading(false);
+      setAction("");
     }
+  }
+
+  async function handleDisconnect() {
+    setLoading(true);
+    setAction("disconnect");
+    try {
+      await window.posElectron.googleDrive.disconnect();
+      toast.success("Google Drive disconnected");
+      setStatus(null);
+      setBackups([]);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+      setAction("");
+    }
+  }
+
+  async function handleBackup() {
+    setError(null);
+    setLoading(true);
+    setAction("backup");
+    try {
+      const res = await window.posElectron.googleDrive.backup();
+      if (res.ok) {
+        toast.success(`Backup uploaded to Google Drive (${Math.round((res.size || 0) / 1024)} KB)`);
+        refresh();
+      } else {
+        setError(res.error || "Backup failed");
+        toast.error(res.error || "Backup failed");
+      }
+    } catch (e: any) {
+      setError(e.message);
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+      setAction("");
+    }
+  }
+
+  async function handleListBackups() {
+    setLoading(true);
+    setAction("list");
+    try {
+      const res = await window.posElectron.googleDrive.listBackups();
+      if (res.ok) {
+        setBackups(res.backups || []);
+      } else {
+        toast.error(res.error || "Failed to list backups");
+      }
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+      setAction("");
+    }
+  }
+
+  async function handleRestore() {
+    if (!restoreTarget) return;
+    setLoading(true);
+    setAction("restore");
+    try {
+      const res = await window.posElectron.googleDrive.restore(restoreTarget.id);
+      if (res.ok) {
+        toast.success("Database restored. Please restart the app.");
+        setRestoreTarget(null);
+      } else {
+        toast.error(res.error || "Restore failed");
+      }
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setLoading(false);
+      setAction("");
+    }
+  }
+
+  if (!isElectron) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Cloud className="w-5 h-5 text-emerald-600" />
+            Cloud Backup (Google Drive)
+          </CardTitle>
+          <CardDescription>
+            Automatic cloud backup to your Google Drive account
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Cloud backup is available in the desktop application. Please use the Shop POS System desktop app to connect Google Drive.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
-    <Card className="shadow-sm">
+    <Card>
       <CardHeader>
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Cloud className="w-5 h-5 text-emerald-600" />
-              Google Drive Backup
-            </CardTitle>
-            <CardDescription>
-              Connect your Google account to automatically back up your data
-              to Google Drive.
-            </CardDescription>
-          </div>
-          {isConnected ? (
-            <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-              <CheckCircle2 className="w-3 h-3 mr-1" />
-              Google Drive: Connected
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="text-muted-foreground">
-              <Cloud className="w-3 h-3 mr-1" />
-              Not Connected
-            </Badge>
-          )}
-        </div>
+        <CardTitle className="flex items-center gap-2">
+          <Cloud className="w-5 h-5 text-emerald-600" />
+          Cloud Backup (Google Drive)
+        </CardTitle>
+        <CardDescription>
+          Automatically backup your data to Google Drive. Your data stays in your own Google account.
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* If connected: show connected state */}
-        {isConnected ? (
-          <Alert className="border-emerald-200 bg-emerald-50/40 dark:bg-emerald-950/20">
-            <Cloud className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-            <AlertTitle className="text-emerald-800 dark:text-emerald-300">
-              Google Drive is connected
-            </AlertTitle>
-            <AlertDescription className="text-xs">
-              Your backup credentials are saved. Click &quot;Backup to Drive
-              Now&quot; below to upload the current database to your Google
-              Drive as a timestamped file.
+        {/* Status row */}
+        <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+          <div className="flex items-center gap-2">
+            {connected ? (
+              <>
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <div>
+                  <div className="font-medium text-sm">Google Drive Connected</div>
+                  <div className="text-xs text-muted-foreground">
+                    {status?.totalBackups || 0} backups stored
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <CloudOff className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <div className="font-medium text-sm">Not Connected</div>
+                  <div className="text-xs text-muted-foreground">Click connect to set up</div>
+                </div>
+              </>
+            )}
+          </div>
+          <Badge className={connected ? "bg-emerald-100 text-emerald-700" : "bg-muted"}>
+            {connected ? "Connected" : "Disconnected"}
+          </Badge>
+        </div>
+
+        {/* Last backup info */}
+        {status?.lastBackup && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Last Backup:</span>
+            <span className="font-medium">
+              {new Date(status.lastBackup.date).toLocaleString()}
+            </span>
+          </div>
+        )}
+
+        {/* Config not set warning */}
+        {status?.configured === false && (
+          <Alert className="border-amber-200 bg-amber-50">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800">
+              Google Drive backup is not configured yet. The app developer needs to set up Google OAuth credentials. See GOOGLE-DRIVE-SETUP.md.
             </AlertDescription>
           </Alert>
-        ) : (
-          <>
-            <p className="text-sm text-muted-foreground">
-              To enable Google Drive backups, set up an OAuth 2.0 Client ID in
-              Google Cloud Console, then paste your credentials below.
-            </p>
-            <Alert className="border-emerald-100 bg-emerald-50/30 dark:bg-emerald-950/10">
-              <Cloud className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-              <AlertTitle className="text-sm text-emerald-800 dark:text-emerald-300">
-                Setup Instructions
-              </AlertTitle>
-              <AlertDescription>
-                <ol className="mt-2 space-y-1 text-xs list-decimal pl-4">
-                  <li>
-                    Go to{" "}
-                    <span className="font-medium">
-                      Google Cloud Console
-                    </span>{" "}
-                    → APIs &amp; Services → Credentials
-                  </li>
-                  <li>
-                    Create an{" "}
-                    <span className="font-medium">
-                      OAuth 2.0 Client ID
-                    </span>{" "}
-                    (type: Desktop app)
-                  </li>
-                  <li>Download the credentials JSON</li>
-                  <li>
-                    Get your{" "}
-                    <span className="font-medium">Refresh Token</span> (run the
-                    OAuth flow once)
-                  </li>
-                </ol>
-              </AlertDescription>
-            </Alert>
-          </>
         )}
 
-        <form onSubmit={onSaveToken} className="space-y-4">
-          <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-2">
-              <Label
-                htmlFor="googleClientId"
-                className="flex items-center gap-1.5"
-              >
-                <Key className="w-3.5 h-3.5 text-emerald-600" />
-                Google Client ID
-              </Label>
-              <Input
-                id="googleClientId"
-                type={showSecrets ? "text" : "password"}
-                value={form.googleClientId}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, googleClientId: e.target.value }))
-                }
-                placeholder="xxxxx.apps.googleusercontent.com"
-                dir="ltr"
-                className="h-11 font-mono text-sm"
-                autoComplete="off"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="googleClientSecret"
-                className="flex items-center gap-1.5"
-              >
-                <Shield className="w-3.5 h-3.5 text-emerald-600" />
-                Google Client Secret
-              </Label>
-              <Input
-                id="googleClientSecret"
-                type={showSecrets ? "text" : "password"}
-                value={form.googleClientSecret}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    googleClientSecret: e.target.value,
-                  }))
-                }
-                placeholder="GOCSPX-xxxxxxx"
-                dir="ltr"
-                className="h-11 font-mono text-sm"
-                autoComplete="off"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label
-                htmlFor="googleRefreshToken"
-                className="flex items-center gap-1.5"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
-                Google Refresh Token
-              </Label>
-              <Input
-                id="googleRefreshToken"
-                type={showSecrets ? "text" : "password"}
-                value={form.googleRefreshToken}
-                onChange={(e) =>
-                  setForm((p) => ({
-                    ...p,
-                    googleRefreshToken: e.target.value,
-                  }))
-                }
-                placeholder="1//xxxxxxx..."
-                dir="ltr"
-                className="h-11 font-mono text-sm"
-                autoComplete="off"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8"
-                onClick={() => setShowSecrets((v) => !v)}
-              >
-                {showSecrets ? "Hide" : "Show"} secrets
-              </Button>
-            </div>
-          </div>
+        {error && (
+          <Alert className="border-red-200 bg-red-50">
+            <AlertCircle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">{error}</AlertDescription>
+          </Alert>
+        )}
 
-          <p className="text-xs text-muted-foreground">
-            Your refresh token is stored encrypted locally. We only use it to
-            upload backups to your Drive.
-          </p>
-
-          <div className="flex flex-wrap justify-end gap-2">
-            {isConnected && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onDisconnect}
-                disabled={saving}
-                className="h-10 text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700"
-              >
-                <X className="w-4 h-4" />
-                Disconnect
-              </Button>
-            )}
+        {/* Actions */}
+        <div className="flex flex-wrap gap-2">
+          {!connected ? (
             <Button
-              type="submit"
-              disabled={saving || (!dirty && !isConnected)}
-              className="h-10 bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={handleConnect}
+              disabled={loading || status?.configured === false}
+              className="bg-emerald-600 hover:bg-emerald-700"
             >
-              {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+              {action === "connect" ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Connecting...</>
               ) : (
-                <Save className="w-4 h-4" />
+                <><Cloud className="w-4 h-4 mr-2" /> Connect Google Drive</>
               )}
-              Save Credentials
             </Button>
-          </div>
-        </form>
-
-        {isConnected && (
-          <>
-            <Separator />
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
-                  <DownloadCloud className="w-4 h-4 text-emerald-700 dark:text-emerald-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-sm font-semibold">Backup to Drive Now</h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Upload the current database file to your Google Drive as a
-                    timestamped backup.
-                  </p>
-                </div>
-              </div>
+          ) : (
+            <>
               <Button
-                type="button"
-                onClick={onBackupNow}
-                disabled={backing}
-                className="h-11 bg-emerald-600 hover:bg-emerald-700 text-white"
+                onClick={handleBackup}
+                disabled={loading}
+                className="bg-emerald-600 hover:bg-emerald-700"
               >
-                {backing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Uploading...
-                  </>
+                {action === "backup" ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading...</>
                 ) : (
-                  <>
-                    <DownloadCloud className="w-4 h-4" />
-                    Backup to Drive Now
-                  </>
+                  <><Upload className="w-4 h-4 mr-2" /> Backup Now</>
                 )}
               </Button>
+              <Button
+                onClick={handleListBackups}
+                disabled={loading}
+                variant="outline"
+              >
+                {action === "list" ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Loading...</>
+                ) : (
+                  <><List className="w-4 h-4 mr-2" /> Restore Backup</>
+                )}
+              </Button>
+              <Button
+                onClick={handleDisconnect}
+                disabled={loading}
+                variant="outline"
+                className="text-red-600 hover:bg-red-50"
+              >
+                {action === "disconnect" ? (
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /></>
+                ) : (
+                  <><CloudOff className="w-4 h-4 mr-2" /> Disconnect</>
+                )}
+              </Button>
+            </>
+          )}
+        </div>
+
+        {/* Backup schedule info */}
+        {connected && (
+          <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm">
+            <div className="flex items-center gap-2 font-medium text-emerald-800">
+              <Clock className="w-4 h-4" />
+              Automatic Backup Schedule
             </div>
-          </>
+            <p className="text-xs text-emerald-700 mt-1">
+              Backups auto-upload every 4 hours. Your data is compressed and encrypted before upload.
+            </p>
+          </div>
         )}
+
+        {/* Restore dialog */}
+        {backups.length > 0 && (
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Available Backups on Google Drive:</Label>
+            <div className="max-h-60 overflow-y-auto rounded-lg border">
+              {backups.map((b) => (
+                <div
+                  key={b.id}
+                  className="flex items-center justify-between p-2 border-b last:border-0 hover:bg-muted/50"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">{b.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(b.createdTime).toLocaleString()} • {Math.round((b.size || 0) / 1024)} KB
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setRestoreTarget(b)}
+                  >
+                    <Download className="w-3 h-3 mr-1" /> Restore
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Restore confirmation */}
+        <AlertDialog open={!!restoreTarget} onOpenChange={(o) => !o && setRestoreTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Restore this backup?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will replace your current database with the selected backup.
+                A safety backup of your current data will be created first.
+                You will need to restart the app after restoring.
+                {restoreTarget && (
+                  <span className="block mt-2 font-medium">
+                    {restoreTarget.name} ({new Date(restoreTarget.createdTime).toLocaleString()})
+                  </span>
+                )}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleRestore}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                {action === "restore" ? "Restoring..." : "Restore Now"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Separator />
+        <div className="flex items-start gap-2 text-xs text-muted-foreground">
+          <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600" />
+          <span>
+            Your Google credentials are encrypted and stored securely on this computer.
+            We only access files in the "POS Backups" folder. You can disconnect anytime.
+          </span>
+        </div>
       </CardContent>
     </Card>
   );

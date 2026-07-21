@@ -1,6 +1,6 @@
 {
   "name": "shop-pos-system",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "Shop POS System - Point of Sale with barcode scanner, products and sales management",
   "author": "Mohsin Rasheed",
   "license": "MIT",
@@ -27,7 +27,9 @@
     },
     "files": [
       "electron/main.cjs",
-      "electron/preload.cjs"
+      "electron/preload.cjs",
+      "electron/google-drive.cjs",
+      "google-oauth.config.json"
     ],
     "extraResources": [
       {

@@ -13,6 +13,9 @@ const {
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+
+// Google Drive backup module
+const gdrive = require("./google-drive.cjs");
 const http = require("http");
 const { spawn } = require("child_process");
 
@@ -274,6 +277,82 @@ if (!gotLock) {
     }
   });
 
+  // ---- Google Drive IPC handlers ----
+  ipcMain.handle("gdrive:connect", async (event) => {
+    try {
+      await gdrive.startOAuthFlow(mainWindow);
+      return { ok: true, status: gdrive.getStatus() };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle("gdrive:disconnect", async () => {
+    try {
+      await gdrive.disconnect();
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle("gdrive:status", async () => {
+    return gdrive.getStatus();
+  });
+
+  ipcMain.handle("gdrive:backup", async () => {
+    try {
+      const result = await gdrive.uploadBackup(dbPath);
+      return { ok: true, ...result };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle("gdrive:listBackups", async () => {
+    try {
+      const backups = await gdrive.listCloudBackups();
+      return { ok: true, backups };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle("gdrive:restore", async (event, fileId) => {
+    try {
+      const tempPath = path.join(os.tmpdir(), "pos-restore-" + Date.now() + ".db");
+      await gdrive.downloadBackup(fileId, tempPath);
+      const safetyDir = path.join(os.homedir(), "ShopPOSBackups");
+      if (!fs.existsSync(safetyDir)) fs.mkdirSync(safetyDir, { recursive: true });
+      fs.copyFileSync(dbPath, path.join(safetyDir, `pre-restore-${Date.now()}.db`));
+      fs.copyFileSync(tempPath, dbPath);
+      fs.unlinkSync(tempPath);
+      return { ok: true, message: "Restored. Please restart the app." };
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  });
+
+  // ---- Auto backup scheduler ----
+  let backupTimer = null;
+  let lastAutoBackup = 0;
+  function startBackupScheduler() {
+    if (backupTimer) clearInterval(backupTimer);
+    backupTimer = setInterval(async () => {
+      const status = gdrive.getStatus();
+      if (!status.connected) return;
+      const now = Date.now();
+      if (now - lastAutoBackup < 4 * 60 * 60 * 1000) return;
+      try {
+        await gdrive.uploadBackup(dbPath);
+        lastAutoBackup = now;
+        console.log("[POS] Auto cloud backup completed");
+      } catch (e) {
+        console.log("[POS] Auto backup failed:", e.message);
+      }
+    }, 60 * 60 * 1000);
+  }
+
   app.whenReady().then(async () => {
     startServer();
     const ok = await waitForServer();
@@ -281,6 +360,9 @@ if (!gotLock) {
       console.error("[POS] Server did not start in time");
     }
     createWindow();
+    startBackupScheduler();
+    setTimeout(checkForUpdates, 5000);
+    setInterval(checkForUpdates, 4 * 60 * 60 * 1000);
   });
 
   app.on("window-all-closed", () => {

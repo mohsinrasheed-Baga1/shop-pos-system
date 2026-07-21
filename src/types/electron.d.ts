@@ -4,15 +4,26 @@
 export {};
 
 declare global {
+  interface GoogleDriveAPI {
+    connect: () => Promise<{ ok: boolean; status?: any; error?: string }>;
+    disconnect: () => Promise<{ ok: boolean; error?: string }>;
+    status: () => Promise<{
+      connected: boolean;
+      configured: boolean;
+      lastBackup: { id: string; name: string; size: number; date: string; cloud: boolean } | null;
+      totalBackups: number;
+    }>;
+    backup: () => Promise<{ ok: boolean; fileId?: string; name?: string; size?: number; error?: string }>;
+    listBackups: () => Promise<{ ok: boolean; backups: Array<{ id: string; name: string; size: string; createdTime: string }>; error?: string }>;
+    restore: (fileId: string) => Promise<{ ok: boolean; message?: string; error?: string }>;
+  }
+
   interface Window {
     posElectron?: {
       version: string;
       platform: string;
-      /**
-       * Open a folder/file in the OS file explorer.
-       * Returns { ok: boolean, opened?: string, error?: string }.
-       */
       openPath?: (p: string) => Promise<{ ok: boolean; opened?: string; error?: string }>;
+      googleDrive?: GoogleDriveAPI;
     };
   }
 }
