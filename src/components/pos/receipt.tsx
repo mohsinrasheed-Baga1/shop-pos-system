@@ -28,30 +28,42 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
   const taxEnabled = !!settings?.taxEnabled;
   const subName = settings?.subName?.trim() || "";
   const logo = settings?.logo || "";
+  const printerWidth = settings?.printerWidth === 80 ? 80 : 58;
+
+  // Width in mm, font sizes based on printer width
+  const widthMm = printerWidth === 80 ? 76 : 54;
+  const fontSize = printerWidth === 80 ? "12px" : "10px";
+  const tableFontSize = printerWidth === 80 ? "11px" : "9px";
+  const maxWidth = printerWidth === 80 ? "300px" : "210px";
+  const barcodeHeight = 28;
+  const barcodeWidth = printerWidth === 80 ? 1.5 : 1;
 
   function handlePrint() {
     const content = printRef.current;
     if (!content) return;
-    const win = window.open("", "_blank", "width=380,height=600");
-    if (!win) {
-      // sonner is not imported here to keep the bundle small; alert as fallback
-      return;
-    }
+    const win = window.open("", "_blank", `width=${printerWidth === 80 ? 320 : 240},height=600`);
+    if (!win) return;
     win.document.write(`
       <html dir="ltr"><head><title>Receipt ${sale.invoiceNo}</title>
       <style>
-        * { font-family: 'Tahoma', sans-serif; box-sizing: border-box; }
-        body { margin: 0; padding: 8px; font-size: 12px; color: #000; }
+        @page { size: ${widthMm}mm auto; margin: 1mm; }
+        * { font-family: 'Courier New', monospace; box-sizing: border-box; margin: 0; padding: 0; }
+        body { width: ${widthMm}mm; font-size: ${fontSize}; color: #000; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .center { text-align: center; }
         .row { display: flex; justify-content: space-between; }
-        .border { border-top: 1px dashed #000; margin: 6px 0; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { text-align: left; padding: 2px 0; font-size: 11px; }
-        th { border-bottom: 1px solid #000; }
+        .border { border-top: 1px dashed #000; margin: 4px 0; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { text-align: left; padding: 1px 0; font-size: ${tableFontSize}; word-wrap: break-word; overflow: hidden; }
+        th { border-bottom: 1px solid #000; font-weight: bold; }
         .bold { font-weight: bold; }
-        .big { font-size: 14px; font-weight: bold; }
-        .sub-name { font-size: 13px; font-weight: bold; margin-top: 2px; }
-        .logo { max-height: 60px; height: 60px; max-width: 100%; margin: 0 auto 4px auto; display: block; }
+        .big { font-size: ${printerWidth === 80 ? "14px" : "11px"}; font-weight: bold; }
+        .sub-name { font-size: ${printerWidth === 80 ? "13px" : "10px"}; font-weight: bold; margin-top: 2px; }
+        .logo { max-height: 50px; height: 50px; max-width: 100%; margin: 0 auto 2px auto; display: block; }
+        .barcode-container { text-align: center; margin: 4px 0; }
+        .barcode-container svg { max-width: 100%; height: auto; display: inline-block; }
+        .item-name { font-size: ${tableFontSize}; }
+        .item-detail { font-size: ${printerWidth === 80 ? "9px" : "8px"}; color: #000; }
+        .payment-label { font-weight: bold; }
       </style></head><body>${content.innerHTML}</body></html>
     `);
     win.document.close();
@@ -59,7 +71,7 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
     setTimeout(() => {
       win.print();
       win.close();
-    }, 350);
+    }, 400);
   }
 
   return (
@@ -73,19 +85,20 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
         </DialogHeader>
         <div
           ref={printRef}
-          className="bg-white text-black p-4 rounded-lg space-y-2 text-sm"
+          className="bg-white text-black p-3 rounded-lg space-y-1"
+          style={{ maxWidth, margin: "0 auto", fontFamily: "'Courier New', monospace", color: "#000" }}
         >
+          {/* Header */}
           <div className="center">
             {logo && (
               <img
                 src={logo}
                 alt="Shop logo"
-                className="logo"
                 style={{
-                  maxHeight: "60px",
-                  height: "60px",
+                  maxHeight: "50px",
+                  height: "50px",
                   maxWidth: "100%",
-                  margin: "0 auto 4px auto",
+                  margin: "0 auto 2px auto",
                   display: "block",
                   objectFit: "contain",
                 }}
@@ -93,113 +106,125 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
             )}
             <div className="big">{settings?.shopName || "POS"}</div>
             {settings?.shopAddress && (
-              <div className="text-xs">{settings.shopAddress}</div>
+              <div style={{ fontSize: tableFontSize }}>{settings.shopAddress}</div>
             )}
             {settings?.shopPhone && (
-              <div className="text-xs">Phone: {settings.shopPhone}</div>
+              <div style={{ fontSize: tableFontSize }}>Ph: {settings.shopPhone}</div>
             )}
             {subName && (
-              <div
-                className="sub-name"
-                style={{
-                  fontSize: "13px",
-                  fontWeight: "bold",
-                  marginTop: "2px",
-                }}
-              >
-                {subName}
-              </div>
+              <div className="sub-name" style={{ marginTop: "2px" }}>{subName}</div>
             )}
           </div>
+
           <div className="border" />
-          <div className="row text-xs">
-            <span>Invoice:</span>
+
+          {/* Invoice info */}
+          <div className="row" style={{ fontSize: tableFontSize }}>
+            <span>Inv:</span>
             <span>{sale.invoiceNo}</span>
           </div>
-          <div className="row text-xs">
+          <div className="row" style={{ fontSize: tableFontSize }}>
             <span>Date:</span>
-            <span>{new Date(sale.createdAt).toLocaleString("en-US")}</span>
+            <span>{new Date(sale.createdAt).toLocaleString("en-US", { dateStyle: "short", timeStyle: "short" })}</span>
           </div>
           {sale.customerName && (
-            <div className="row text-xs">
+            <div className="row" style={{ fontSize: tableFontSize }}>
               <span>Customer:</span>
               <span>{sale.customerName}</span>
             </div>
           )}
+          {sale.card?.name && (
+            <div className="row" style={{ fontSize: tableFontSize }}>
+              <span>Card:</span>
+              <span>{sale.card.name} ({sale.card.cardNumber})</span>
+            </div>
+          )}
+
           <div className="border" />
+
+          {/* Items table */}
           <table>
             <thead>
               <tr>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Amount</th>
+                <th style={{ width: "55%" }}>Item</th>
+                <th style={{ width: "15%", textAlign: "center" }}>Qty</th>
+                <th style={{ width: "30%", textAlign: "right" }}>Amt</th>
               </tr>
             </thead>
             <tbody>
               {sale.items?.map((it: any) => (
                 <tr key={it.id}>
-                  <td className="text-xs">
-                    {it.name}
-                    <div className="text-[10px] opacity-70">
-                      {it.price} x {it.quantity} {unitLabel(it.unit)}
-                    </div>
+                  <td style={{ width: "55%" }}>
+                    <div className="item-name">{it.name}</div>
+                    <div className="item-detail">{it.price} x {it.quantity} {unitLabel(it.unit)}</div>
                   </td>
-                  <td className="text-xs">{it.quantity}</td>
-                  <td className="text-xs">
-                    {formatMoney(it.lineTotal, currency)}
-                  </td>
+                  <td style={{ width: "15%", textAlign: "center" }}>{it.quantity}</td>
+                  <td style={{ width: "30%", textAlign: "right" }}>{formatMoney(it.lineTotal, currency)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+
           <div className="border" />
-          <div className="row text-xs">
+
+          {/* Totals */}
+          <div className="row" style={{ fontSize: tableFontSize }}>
             <span>Subtotal:</span>
             <span>{formatMoney(sale.subtotal, currency)}</span>
           </div>
           {taxEnabled && sale.taxTotal > 0 && (
-            <div className="row text-xs">
+            <div className="row" style={{ fontSize: tableFontSize }}>
               <span>Tax:</span>
               <span>{formatMoney(sale.taxTotal, currency)}</span>
             </div>
           )}
           {sale.discount > 0 && (
-            <div className="row text-xs">
+            <div className="row" style={{ fontSize: tableFontSize }}>
               <span>Discount:</span>
               <span>-{formatMoney(sale.discount, currency)}</span>
             </div>
           )}
-          <div className="row bold big">
-            <span>Total:</span>
+          <div className="row bold big" style={{ marginTop: "2px" }}>
+            <span>TOTAL:</span>
             <span>{formatMoney(sale.total, currency)}</span>
           </div>
-          <div className="row text-xs">
-            <span>Payment:</span>
+
+          {/* Payment */}
+          <div className="row" style={{ fontSize: tableFontSize }}>
+            <span className="payment-label">Payment:</span>
             <span>
               {sale.paymentMethod === "CASH"
                 ? "Cash"
                 : sale.paymentMethod === "CARD"
                 ? "Card"
-                : "Mobile"}{" "}
-              ({formatMoney(sale.paidAmount, currency)})
+                : sale.paymentMethod === "SHOP_CARD"
+                ? "Shop Card"
+                : "Mobile"}
+              {" "}({formatMoney(sale.paidAmount, currency)})
             </span>
           </div>
           {sale.change > 0 && (
-            <div className="row text-xs">
+            <div className="row" style={{ fontSize: tableFontSize }}>
               <span>Change:</span>
               <span>{formatMoney(sale.change, currency)}</span>
             </div>
           )}
+
           <div className="border" />
-          <div className="center">
+
+          {/* Barcode — inline, compact, dark black */}
+          <div className="barcode-container" style={{ textAlign: "center", margin: "2px 0" }}>
             <BarcodeDisplay
               value={sale.invoiceNo}
               format="CODE128"
-              height={36}
-              width={1.5}
+              height={barcodeHeight}
+              width={barcodeWidth}
+              displayValue={true}
             />
           </div>
-          <div className="center text-xs mt-2">
+
+          {/* Footer */}
+          <div className="center" style={{ fontSize: tableFontSize, marginTop: "4px" }}>
             {settings?.receiptFooter || "Thank you! Please come again."}
           </div>
         </div>

@@ -53,6 +53,7 @@ import {
 import { toast } from "sonner";
 import { formatMoney, unitLabel } from "@/lib/pos-utils";
 import { BarcodeDisplay } from "@/components/barcode/barcode-display";
+import { ImageUpload } from "@/components/pos/image-upload";
 import type { Product, Category, Vendor } from "@/types";
 
 interface ProductsViewProps {
@@ -86,6 +87,7 @@ const emptyForm = {
   expiryDate: "",
   hasBarcode: true,
   active: true,
+  image: null as string | null,
 };
 
 function formatExpiryBadge(expiry: string | null) {
@@ -191,6 +193,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
         : "",
       hasBarcode: p.hasBarcode,
       active: p.active,
+      image: p.image || null,
     });
     setEditId(p.id);
     setDialogOpen(true);
@@ -223,6 +226,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
         expiryDate: form.expiryDate || null,
         hasBarcode: form.hasBarcode,
         active: form.active,
+        image: form.image || null,
       };
       const url = editId
         ? `/api/products/${editId}`
@@ -682,6 +686,13 @@ export function ProductsView({ userRole }: ProductsViewProps) {
                 onCheckedChange={(c) => setForm({ ...form, active: c })}
               />
             </div>
+
+            {/* Product Image */}
+            <ImageUpload
+              value={form.image}
+              onChange={(img) => setForm({ ...form, image: img })}
+              label="Product Image"
+            />
           </div>
           <DialogFooter>
             <Button
