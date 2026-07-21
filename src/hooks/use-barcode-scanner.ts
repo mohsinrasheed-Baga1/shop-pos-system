@@ -19,18 +19,15 @@ function handleKeyDown(e: KeyboardEvent) {
   // Ignore modifier combos
   if (e.ctrlKey || e.altKey || e.metaKey) return;
 
-  // Check if a text input is focused (skip global dispatch — scanner types into the field)
+  // Check if a text input with data-barcode-input is focused
+  // (e.g. product add dialog barcode field — scanner should type into it, not fire global)
   const active = document.activeElement;
   if (
     active &&
-    (active.tagName === "INPUT" ||
-      active.tagName === "TEXTAREA" ||
-      active.tagName === "SELECT" ||
-      (active as HTMLElement).isContentEditable)
+    active.tagName === "INPUT" &&
+    active.getAttribute("data-barcode-input") === "true"
   ) {
-    // But if the input has data-barcode-input, the scanner should still type into it
-    // and we DON'T fire the global callback. Let the Enter key submit naturally.
-    // Skip global dispatch entirely when an input is focused.
+    // Scanner types into the field directly, don't fire global callback
     return;
   }
 
@@ -45,6 +42,17 @@ function handleKeyDown(e: KeyboardEvent) {
     if (buffer.length >= 4) {
       // Fire to all subscribers
       const code = buffer;
+      // Clear any focused input that received scanner chars (e.g. search box)
+      const active = document.activeElement;
+      if (
+        active &&
+        active.tagName === "INPUT" &&
+        active.getAttribute("data-barcode-input") !== "true"
+      ) {
+        (active as HTMLInputElement).value = "";
+        // trigger input event so React state updates
+        active.dispatchEvent(new Event("input", { bubbles: true }));
+      }
       subscribers.forEach((cb) => {
         try {
           cb(code);

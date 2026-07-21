@@ -65,6 +65,23 @@ export async function DELETE(
     return NextResponse.json({ error: "Admin or manager only" }, { status: 403 });
   }
   const { id } = await params;
-  await db.product.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+  try {
+    // Delete related records first to avoid foreign key constraint errors
+    await db.stockLog.deleteMany({ where: { productId: id } });
+    await db.storeTransaction.deleteMany({ where: { productId: id } });
+    // Delete SaleItems that reference this product (set productId null is not possible since required field, so delete them)
+    await db.saleItem.deleteMany({ where: { productId: id } });
+    // Now delete the product
+    await db.product.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    // If product not found, return ok
+    if (e.code === "P2025") {
+      return NextResponse.json({ ok: true });
+    }
+    return NextResponse.json(
+      { error: e.message || "Failed to delete product" },
+      { status: 500 }
+    );
+  }
 }
