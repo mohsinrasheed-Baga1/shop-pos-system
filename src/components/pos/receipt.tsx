@@ -31,11 +31,11 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
   const printerWidth = settings?.printerWidth === 80 ? 80 : 58;
 
   // Width in mm, font sizes based on printer width
-  const widthMm = printerWidth === 80 ? 76 : 54;
-  const fontSize = printerWidth === 80 ? "12px" : "10px";
-  const tableFontSize = printerWidth === 80 ? "11px" : "9px";
-  const maxWidth = printerWidth === 80 ? "300px" : "210px";
-  const barcodeHeight = 28;
+  const widthMm = printerWidth === 80 ? 76 : 52;
+  const fontSize = printerWidth === 80 ? "12px" : "9px";
+  const tableFontSize = printerWidth === 80 ? "11px" : "8px";
+  const maxWidth = printerWidth === 80 ? "300px" : "200px";
+  const barcodeHeight = 24;
   const barcodeWidth = printerWidth === 80 ? 1.5 : 1;
 
   function handlePrint() {
@@ -173,7 +173,7 @@ export function Receipt({ sale, settings, open, onOpenChange }: ReceiptProps) {
             <span>{formatMoney(sale.subtotal, currency)}</span>
           </div>
           {taxEnabled && sale.taxTotal > 0 && (
-            <div className="row" style={{ fontSize: tableFontSize }}>
+            <div className="row bold" style={{ fontSize: tableFontSize, fontWeight: "bold", color: "#000" }}>
               <span>Tax:</span>
               <span>{formatMoney(sale.taxTotal, currency)}</span>
             </div>

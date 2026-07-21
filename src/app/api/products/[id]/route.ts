@@ -15,7 +15,7 @@ export async function PUT(
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const prevStock = existing.stock;
-  const newStock = Number(body.stock);
+  const newStock = Number(body.stock) || existing.stock;
   const stockDiff = newStock - prevStock;
 
   const product = await db.product.update({
@@ -29,7 +29,7 @@ export async function PUT(
       wholesalePrice: Number(body.wholesalePrice) || 0,
       unit: body.unit || "piece",
       stock: newStock,
-      storeStock: Number(body.storeStock) ?? prevStock,
+      storeStock: body.storeStock !== undefined && body.storeStock !== "" ? Number(body.storeStock) : existing.storeStock,
       minStock: Number(body.minStock) || 0,
       taxRate: Number(body.taxRate) || 0,
       expiryDate: body.expiryDate ? new Date(body.expiryDate) : null,
