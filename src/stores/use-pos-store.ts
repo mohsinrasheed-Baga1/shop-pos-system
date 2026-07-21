@@ -30,18 +30,30 @@ export const useAppStore = create<AppState>((set) => ({
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
 }));
 
+export type SaleType = "RETAIL" | "WHOLESALE";
+
+// Helper: get effective price for a product based on sale type
+export function effectivePrice(product: Product, saleType: SaleType): number {
+  if (saleType === "WHOLESALE" && product.wholesalePrice > 0) {
+    return product.wholesalePrice;
+  }
+  return product.salePrice;
+}
+
 interface CartState {
   items: CartItem[];
   discount: number;
   customerName: string;
   customerPhone: string;
   paymentMethod: "CASH" | "CARD" | "MOBILE";
+  saleType: SaleType;
   addItem: (product: Product, qty?: number) => void;
   removeItem: (productId: string) => void;
   setQty: (productId: string, qty: number) => void;
   setDiscount: (v: number) => void;
   setCustomer: (name: string, phone: string) => void;
   setPaymentMethod: (m: "CASH" | "CARD" | "MOBILE") => void;
+  setSaleType: (s: SaleType) => void;
   clear: () => void;
   totals: (taxEnabled: boolean) => {
     subtotal: number;
@@ -58,6 +70,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   customerName: "",
   customerPhone: "",
   paymentMethod: "CASH",
+  saleType: "RETAIL",
   addItem: (product, qty = 1) =>
     set((state) => {
       const existing = state.items.find((i) => i.product.id === product.id);
@@ -89,6 +102,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   setCustomer: (customerName, customerPhone) =>
     set({ customerName, customerPhone }),
   setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
+  setSaleType: (saleType) => set({ saleType }),
   clear: () =>
     set({
       items: [],
@@ -96,13 +110,15 @@ export const useCartStore = create<CartState>((set, get) => ({
       customerName: "",
       customerPhone: "",
       paymentMethod: "CASH",
+      saleType: "RETAIL",
     }),
   totals: (taxEnabled) => {
-    const { items, discount } = get();
+    const { items, discount, saleType } = get();
     let subtotal = 0;
     let taxTotal = 0;
     items.forEach((i) => {
-      const line = i.product.salePrice * i.quantity;
+      const price = effectivePrice(i.product, saleType);
+      const line = price * i.quantity;
       subtotal += line;
       if (taxEnabled) {
         taxTotal += line * (i.product.taxRate / 100);

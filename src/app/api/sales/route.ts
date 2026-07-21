@@ -119,5 +119,30 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // If linked to a card, deduct from balance (payment auto-deducted from card account)
+  if (body.cardId) {
+    const card = await db.customerCard.findUnique({ where: { id: body.cardId } });
+    if (card) {
+      // Deduct total from balance. Balance can go negative (customer owes).
+      // If they have advance (positive balance), it reduces their credit.
+      await db.customerCard.update({
+        where: { id: body.cardId },
+        data: {
+          totalPurchases: { increment: total },
+          balance: { decrement: total },
+        },
+      });
+      await db.cardTransaction.create({
+        data: {
+          cardId: body.cardId,
+          type: "PURCHASE",
+          amount: total,
+          description: `Sale ${invoiceNo} — auto-deducted from account`,
+          saleId: sale.id,
+        },
+      });
+    }
+  }
+
   return NextResponse.json({ sale });
 }

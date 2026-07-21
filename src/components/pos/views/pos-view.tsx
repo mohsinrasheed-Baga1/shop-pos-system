@@ -142,11 +142,15 @@ export function PosView({ settings }: PosViewProps) {
         items: cart.items.map((i) => ({
           productId: i.product.id,
           quantity: i.quantity,
-          price: i.product.salePrice,
+          price: cart.saleType === "WHOLESALE" && i.product.wholesalePrice > 0
+            ? i.product.wholesalePrice
+            : i.product.salePrice,
         })),
         discount: cart.discount,
         paidAmount: Number(paidAmount) || totals.total,
         paymentMethod: cart.paymentMethod,
+        saleType: cart.saleType,
+        cardId: scannedCard?.id || null,
         customerName: cart.customerName,
         customerPhone: cart.customerPhone,
         invoicePrefix: settings?.invoicePrefix || "INV",
@@ -166,6 +170,7 @@ export function PosView({ settings }: PosViewProps) {
       setReceiptOpen(true);
       setCheckoutOpen(false);
       cart.clear();
+      setScannedCard(null);
       setPaidAmount("");
       toast.success("Sale completed!");
       loadProducts();
@@ -193,13 +198,38 @@ export function PosView({ settings }: PosViewProps) {
             Select products or scan a barcode
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => setView("scanner")}
-          className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-        >
-          <ScanBarcode className="w-4 h-4 mr-2" /> Barcode Scanner
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Retail/Wholesale toggle */}
+          <div className="flex rounded-lg border overflow-hidden">
+            <button
+              onClick={() => cart.setSaleType("RETAIL")}
+              className={`px-3 py-2 text-sm font-medium transition-colors ${
+                cart.saleType === "RETAIL"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-background hover:bg-muted"
+              }`}
+            >
+              Retail
+            </button>
+            <button
+              onClick={() => cart.setSaleType("WHOLESALE")}
+              className={`px-3 py-2 text-sm font-medium transition-colors ${
+                cart.saleType === "WHOLESALE"
+                  ? "bg-amber-500 text-white"
+                  : "bg-background hover:bg-muted"
+              }`}
+            >
+              Wholesale
+            </button>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => setView("scanner")}
+            className="border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+          >
+            <ScanBarcode className="w-4 h-4 mr-2" /> Scanner
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -286,7 +316,15 @@ export function PosView({ settings }: PosViewProps) {
                   </div>
                   <div className="flex items-center justify-between mt-1">
                     <span className="text-emerald-700 font-bold text-sm">
-                      {formatMoney(p.salePrice, currency)}
+                      {formatMoney(
+                        cart.saleType === "WHOLESALE" && p.wholesalePrice > 0
+                          ? p.wholesalePrice
+                          : p.salePrice,
+                        currency
+                      )}
+                      {cart.saleType === "WHOLESALE" && p.wholesalePrice > 0 && (
+                        <span className="ml-1 text-[10px] text-amber-600">W</span>
+                      )}
                     </span>
                     <span
                       className={`text-xs ${
@@ -350,7 +388,12 @@ export function PosView({ settings }: PosViewProps) {
                               {item.product.name}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {formatMoney(item.product.salePrice, currency)} /{" "}
+                              {formatMoney(
+                                cart.saleType === "WHOLESALE" && item.product.wholesalePrice > 0
+                                  ? item.product.wholesalePrice
+                                  : item.product.salePrice,
+                                currency
+                              )} /{" "}
                               {unitLabel(item.product.unit)}
                             </div>
                           </div>
@@ -393,7 +436,9 @@ export function PosView({ settings }: PosViewProps) {
                           </div>
                           <div className="text-sm font-bold text-emerald-700 w-16 text-right">
                             {formatMoney(
-                              item.product.salePrice * item.quantity,
+                              (cart.saleType === "WHOLESALE" && item.product.wholesalePrice > 0
+                                ? item.product.wholesalePrice
+                                : item.product.salePrice) * item.quantity,
                               currency
                             )}
                           </div>
@@ -411,6 +456,32 @@ export function PosView({ settings }: PosViewProps) {
                   </ScrollArea>
 
                   <Separator />
+
+                  {/* linked shop card */}
+                  {scannedCard && (
+                    <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-2">
+                      <div className="flex items-center gap-2">
+                        <CreditCard className="w-4 h-4 text-emerald-600" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">{scannedCard.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {scannedCard.cardNumber} • {scannedCard.type === "WHOLESALE" ? "Wholesale" : "Regular"}
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-red-600 hover:bg-red-50"
+                        onClick={() => {
+                          setScannedCard(null);
+                          cart.setSaleType("RETAIL");
+                        }}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  )}
 
                   {/* customer */}
                   <div className="grid grid-cols-2 gap-2">
@@ -472,7 +543,14 @@ export function PosView({ settings }: PosViewProps) {
 
                   <Button
                     className="w-full bg-emerald-600 hover:bg-emerald-700 h-11"
-                    onClick={() => setCheckoutOpen(true)}
+                    onClick={() => {
+                      // If card linked, direct checkout (no payment dialog)
+                      if (scannedCard) {
+                        handleCheckout();
+                      } else {
+                        setCheckoutOpen(true);
+                      }
+                    }}
                   >
                     <CheckCircle2 className="w-5 h-5 mr-2" /> Checkout
                   </Button>

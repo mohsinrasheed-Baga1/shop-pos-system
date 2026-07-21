@@ -77,6 +77,7 @@ const emptyForm = {
   vendorId: "",
   costPrice: "",
   salePrice: "",
+  wholesalePrice: "",
   unit: "piece",
   stock: "",
   minStock: "",
@@ -177,6 +178,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
       vendorId: p.vendorId || "",
       costPrice: p.costPrice.toString(),
       salePrice: p.salePrice.toString(),
+      wholesalePrice: (p.wholesalePrice || 0).toString(),
       unit: p.unit,
       stock: p.stock.toString(),
       minStock: p.minStock.toString(),
@@ -212,6 +214,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
         vendorId: form.vendorId || null,
         costPrice: Number(form.costPrice) || 0,
         salePrice: Number(form.salePrice) || 0,
+        wholesalePrice: Number(form.wholesalePrice) || 0,
         unit: form.unit,
         stock: Number(form.stock) || 0,
         minStock: Number(form.minStock) || 0,
@@ -580,6 +583,16 @@ export function ProductsView({ userRole }: ProductsViewProps) {
                   value={form.salePrice}
                   onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
                   className="text-left"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Wholesale Price</Label>
+                <Input
+                  type="number"
+                  value={form.wholesalePrice}
+                  onChange={(e) => setForm({ ...form, wholesalePrice: e.target.value })}
+                  className="text-left"
+                  placeholder="0"
                 />
               </div>
             </div>
