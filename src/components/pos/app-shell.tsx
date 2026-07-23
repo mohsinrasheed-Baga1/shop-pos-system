@@ -180,6 +180,17 @@ export function AppShell({ user, settings }: AppShellProps) {
           </div>
 
           <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+            {/* Prominent Sell button */}
+            <button
+              onClick={() => {
+                setView("pos");
+                setSidebarOpen(false);
+              }}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg text-base font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-md mb-3"
+            >
+              <ShoppingCart className="w-5 h-5" />
+              SELL (POS)
+            </button>
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = view === item.id;

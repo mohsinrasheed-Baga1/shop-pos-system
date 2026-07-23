@@ -58,6 +58,10 @@ export function PosView({ settings }: PosViewProps) {
   const [submitting, setSubmitting] = React.useState(false);
   const [returnOpen, setReturnOpen] = React.useState(false);
   const [calcOpen, setCalcOpen] = React.useState(false);
+  const [highlightedIndex, setHighlightedIndex] = React.useState(0);
+
+  const searchRef = React.useRef<HTMLInputElement>(null);
+  const productGridRef = React.useRef<HTMLDivElement>(null);
 
   const cart = useCartStore();
   const { setView } = useAppStore();
@@ -105,7 +109,6 @@ export function PosView({ settings }: PosViewProps) {
       toast.error("This product is inactive");
       return;
     }
-    // Check stock — prevent adding more than available
     const existingItem = cart.items.find((i) => i.product.id === product.id);
     const currentInCart = existingItem ? existingItem.quantity : 0;
     const isPack = product.packPrice > 0 && product.salePrice === product.packPrice;
@@ -115,6 +118,10 @@ export function PosView({ settings }: PosViewProps) {
       return;
     }
     cart.addItem(product, qty);
+    // After adding, clear search and refocus for next product
+    setQ("");
+    setHighlightedIndex(0);
+    setTimeout(() => searchRef.current?.focus(), 50);
   }
 
   // Handle scanned barcode — look up product/card and take action
@@ -141,6 +148,71 @@ export function PosView({ settings }: PosViewProps) {
   }
 
   useBarcodeScanner(handleScannedCode);
+
+  // Auto-focus search bar on mount
+  React.useEffect(() => {
+    searchRef.current?.focus();
+  }, []);
+
+  // Auto-focus search bar after dialogs close
+  React.useEffect(() => {
+    if (!checkoutOpen && !receiptOpen && !returnOpen && !calcOpen) {
+      const t = setTimeout(() => searchRef.current?.focus(), 100);
+      return () => clearTimeout(t);
+    }
+  }, [checkoutOpen, receiptOpen, returnOpen, calcOpen]);
+
+  // Scroll highlighted product into view
+  React.useEffect(() => {
+    const el = document.querySelector(`[data-product-idx="${highlightedIndex}"]`);
+    el?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [highlightedIndex]);
+
+  // Keyboard shortcuts: arrow keys + Enter + F-keys
+  React.useEffect(() => {
+    function handlePosKey(e: KeyboardEvent) {
+      if (returnOpen || calcOpen || checkoutOpen || receiptOpen) return;
+      const active = document.activeElement;
+      const isSearchFocused = active === searchRef.current;
+
+      // Arrow key navigation through products
+      if (isSearchFocused || (!active || active.tagName !== "INPUT")) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setHighlightedIndex((p) => Math.min(p + 1, products.length - 1));
+          return;
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setHighlightedIndex((p) => Math.max(p - 1, 0));
+          return;
+        } else if (e.key === "ArrowRight") {
+          e.preventDefault();
+          setHighlightedIndex((p) => Math.min(p + 4, products.length - 1));
+          return;
+        } else if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          setHighlightedIndex((p) => Math.max(p - 4, 0));
+          return;
+        } else if (e.key === "Enter" && products.length > 0 && isSearchFocused) {
+          e.preventDefault();
+          const product = products[highlightedIndex];
+          if (product) addToCart(product);
+          return;
+        }
+      }
+
+      // Function keys
+      if (e.key === "F2") { e.preventDefault(); setCheckoutOpen(true); }
+      else if (e.key === "F3") { e.preventDefault(); setReturnOpen(true); }
+      else if (e.key === "F4") { e.preventDefault(); setCalcOpen(true); }
+      else if (e.key === "F9") { e.preventDefault(); cart.setSaleType(cart.saleType === "RETAIL" ? "WHOLESALE" : "RETAIL"); }
+      else if (e.key === "F12") { e.preventDefault(); cart.clear(); setScannedCard(null); toast.success("Cart cleared"); setTimeout(() => searchRef.current?.focus(), 50); }
+      else if (e.key === "Escape") { setQ(""); setHighlightedIndex(0); searchRef.current?.focus(); }
+    }
+    window.addEventListener("keydown", handlePosKey);
+    return () => window.removeEventListener("keydown", handlePosKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart.saleType, returnOpen, calcOpen, checkoutOpen, receiptOpen, products, highlightedIndex]);
 
   async function handleCheckout() {
     if (cart.items.length === 0) {
@@ -263,9 +335,10 @@ export function PosView({ settings }: PosViewProps) {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name or barcode..."
+              ref={searchRef}
+              placeholder="Search by name or barcode... (↑↓ to navigate, Enter to add)"
               value={q}
-              onChange={(e) => setQ(e.target.value)}
+              onChange={(e) => { setQ(e.target.value); setHighlightedIndex(0); }}
               className="pl-10 h-11"
             />
           </div>
@@ -318,12 +391,17 @@ export function PosView({ settings }: PosViewProps) {
           ) : (
             <ScrollArea className="h-[calc(100vh-280px)] pr-2">
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {products.map((p) => (
+                {products.map((p, idx) => (
                 <button
                   key={p.id}
+                  data-product-idx={idx}
                   onClick={() => addToCart(p)}
                   disabled={!p.active}
-                  className="group text-left bg-card rounded-xl border p-2 hover:border-emerald-400 hover:shadow-md transition-all disabled:opacity-50"
+                  className={`group text-left bg-card rounded-xl border p-2 transition-all disabled:opacity-50 ${
+                    idx === highlightedIndex
+                      ? "border-emerald-500 ring-2 ring-emerald-400 shadow-md"
+                      : "hover:border-emerald-400 hover:shadow-md"
+                  }`}
                 >
                   <div className="aspect-square rounded-lg bg-gradient-to-br from-emerald-50 to-amber-50 flex items-center justify-center mb-1.5 overflow-hidden">
                     {p.image ? (
