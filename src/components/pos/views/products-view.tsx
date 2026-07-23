@@ -239,7 +239,12 @@ export function ProductsView({ userRole }: ProductsViewProps) {
       });
       const data = await res.json();
       if (!res.ok) {
-        toast.error(data.error || "Failed to save");
+        const msg = data.error || "Failed to save";
+        if (msg.includes("barcode") || msg.includes("already")) {
+          toast.error("This barcode already exists! Use a different barcode or edit the existing product.");
+        } else {
+          toast.error(msg);
+        }
         setSaving(false);
         return;
       }

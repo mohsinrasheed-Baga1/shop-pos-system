@@ -78,10 +78,9 @@ export function NotificationsBell() {
   const { setView } = useAppStore();
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
-  const [notifications, setNotifications] = React.useState<NotificationsResponse | null>(
-    null
-  );
+  const [notifications, setNotifications] = React.useState<NotificationsResponse | null>(null);
   const [update, setUpdate] = React.useState<UpdateInfo | null>(null);
+  const [dismissed, setDismissed] = React.useState(false);
 
   const loadNotifications = React.useCallback(async () => {
     try {
@@ -121,16 +120,21 @@ export function NotificationsBell() {
     return () => window.clearInterval(interval);
   }, [loadNotifications, checkForUpdate]);
 
-  const total =
-    (notifications?.counts?.total || 0) + (update ? 1 : 0);
+  const total = dismissed ? 0 : (notifications?.counts?.total || 0) + (update ? 1 : 0);
 
   function handleNavigate() {
     setOpen(false);
+    setDismissed(true);
     setView("products");
   }
 
+  function handleOpenChange(o: boolean) {
+    setOpen(o);
+    if (o) setDismissed(false);
+  }
+
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"

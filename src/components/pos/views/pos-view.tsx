@@ -100,15 +100,21 @@ export function PosView({ settings }: PosViewProps) {
     return () => clearTimeout(t);
   }, [loadProducts]);
 
-  function addToCart(product: Product) {
+  function addToCart(product: Product, qty: number = 1) {
     if (!product.active) {
       toast.error("This product is inactive");
       return;
     }
-    if (product.stock <= 0 && !isLooseUnit(product.unit)) {
-      toast.warning("Out of stock");
+    // Check stock — prevent adding more than available
+    const existingItem = cart.items.find((i) => i.product.id === product.id);
+    const currentInCart = existingItem ? existingItem.quantity : 0;
+    const isPack = product.packPrice > 0 && product.salePrice === product.packPrice;
+    const effectiveQty = isPack ? qty * (product.packQuantity || 1) : qty;
+    if (!isLooseUnit(product.unit) && currentInCart + effectiveQty > product.stock) {
+      toast.error(`Low stock! Only ${product.stock} ${unitLabel(product.unit)} available`);
+      return;
     }
-    cart.addItem(product, 1);
+    cart.addItem(product, qty);
   }
 
   // Handle scanned barcode — look up product/card and take action

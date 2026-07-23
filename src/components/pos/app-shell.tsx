@@ -20,6 +20,7 @@ import {
   LayoutDashboard,
   Warehouse,
   Truck,
+  TrendingDown,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ import { CardsView } from "@/components/pos/views/cards-view";
 import { DashboardView } from "@/components/pos/views/dashboard-view";
 import { StoreView } from "@/components/pos/views/store-view";
 import { VendorsView } from "@/components/pos/views/vendors-view";
+import { ExpensesView } from "@/components/pos/views/expenses-view";
 import { NotificationsBell } from "@/components/pos/notifications-bell";
 import { toast } from "sonner";
 
@@ -50,6 +52,7 @@ const NAV: { id: View; label: string; icon: any; minRole?: string }[] = [
   { id: "products", label: "Products", icon: Package },
   { id: "store", label: "Main Store", icon: Warehouse },
   { id: "vendors", label: "Vendors", icon: Truck },
+  { id: "expenses", label: "Expenses", icon: TrendingDown },
   { id: "cards", label: "Shop Cards", icon: CreditCard },
   { id: "sales", label: "Sales History", icon: Receipt },
   { id: "reports", label: "Reports", icon: BarChart3 },
@@ -95,6 +98,8 @@ export function AppShell({ user, settings }: AppShellProps) {
         return <StoreView />;
       case "vendors":
         return <VendorsView />;
+      case "expenses":
+        return <ExpensesView />;
       case "users":
         return user.role === "ADMIN" ? <UsersView /> : <PosView settings={settings} />;
       case "settings":
