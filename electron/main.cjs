@@ -230,6 +230,17 @@ function createWindow() {
   // Show window only after content loads (avoid white flash)
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
+    mainWindow.focus();
+    // Force focus on webview so keyboard shortcuts work
+    setTimeout(() => mainWindow.focusOnWebView(), 200);
+  });
+
+  // Re-focus webview on window focus/click (ensures keyboard events work)
+  mainWindow.on("focus", () => {
+    mainWindow.focusOnWebView();
+  });
+  mainWindow.on("show", () => {
+    setTimeout(() => mainWindow.focusOnWebView(), 100);
   });
 
   mainWindow.loadURL(`http://${HOST}:${PORT}/`);

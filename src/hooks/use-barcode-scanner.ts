@@ -50,7 +50,6 @@ function handleKeyDown(e: KeyboardEvent) {
         active.getAttribute("data-barcode-input") !== "true"
       ) {
         (active as HTMLInputElement).value = "";
-        // trigger input event so React state updates
         active.dispatchEvent(new Event("input", { bubbles: true }));
       }
       subscribers.forEach((cb) => {
@@ -60,6 +59,28 @@ function handleKeyDown(e: KeyboardEvent) {
       });
       e.preventDefault();
     }
+    buffer = "";
+    return;
+  }
+
+  // Space bar = Enter for scanners (some scanners send Space instead of Enter)
+  if (e.key === " " && buffer.length >= 4) {
+    const code = buffer;
+    const active = document.activeElement;
+    if (
+      active &&
+      active.tagName === "INPUT" &&
+      active.getAttribute("data-barcode-input") !== "true"
+    ) {
+      (active as HTMLInputElement).value = "";
+      active.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    subscribers.forEach((cb) => {
+      try {
+        cb(code);
+      } catch {}
+    });
+    e.preventDefault();
     buffer = "";
     return;
   }
