@@ -1,4 +1,4 @@
-import { db } from "@/lib/db";
+import { db, ensureSchema } from "@/lib/db";
 import bcrypt from "bcryptjs";
 
 let seeded = false;
@@ -6,6 +6,8 @@ let seeded = false;
 export async function seedIfNeeded() {
   if (seeded) return;
   try {
+    // Always ensure schema exists first
+    await ensureSchema();
     const settings = await db.settings.findUnique({ where: { id: "shop" } });
     if (!settings) {
       await db.settings.create({

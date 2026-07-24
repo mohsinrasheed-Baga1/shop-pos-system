@@ -241,14 +241,24 @@ export async function ensureSchema() {
   try {
     const statements = SCHEMA_SQL.split(";").map((s) => s.trim()).filter(Boolean);
     for (const stmt of statements) {
-      await db.$executeRawUnsafe(stmt + ";");
+      try {
+        await db.$executeRawUnsafe(stmt + ";");
+      } catch (e: any) {
+        // "duplicate column" or "table already exists" errors are OK — skip
+        if (e.message && (e.message.includes("duplicate") || e.message.includes("already exists"))) {
+          continue;
+        }
+        throw e;
+      }
     }
     for (const [table, cols] of Object.entries(COLUMN_ADDITIONS)) {
       for (const [col, def] of cols) {
         try {
           await db.$executeRawUnsafe(`ALTER TABLE ${table} ADD COLUMN ${col} ${def};`);
-        } catch {
-          // column already exists
+        } catch (e: any) {
+          // column already exists — expected, skip
+          if (e.message && e.message.includes("duplicate")) continue;
+          // other errors also skip (table might not exist yet)
         }
       }
     }
