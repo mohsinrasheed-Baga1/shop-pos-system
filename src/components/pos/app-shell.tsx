@@ -72,6 +72,19 @@ export function AppShell({ user, settings }: AppShellProps) {
     (n) => !n.minRole || roleOrder[user.role as keyof typeof roleOrder] >= roleOrder[n.minRole as keyof typeof roleOrder]
   );
 
+  // Global shortcut: Ctrl+Shift+P → jump to POS from any page
+  React.useEffect(() => {
+    function handleGlobalKey(e: KeyboardEvent) {
+      if (e.ctrlKey && e.shiftKey && (e.key === "P" || e.key === "p")) {
+        e.preventDefault();
+        setView("pos");
+        toast.success("→ POS");
+      }
+    }
+    window.addEventListener("keydown", handleGlobalKey);
+    return () => window.removeEventListener("keydown", handleGlobalKey);
+  }, [setView]);
+
   async function handleSignOut() {
     await signOut({ redirect: false });
     toast.success("Logged out");

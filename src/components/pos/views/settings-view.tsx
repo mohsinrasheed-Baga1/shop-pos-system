@@ -81,6 +81,7 @@ import {
   CloudOff,
   List,
   Clock,
+  Keyboard,
 } from "lucide-react";
 import type { Settings } from "@/types";
 import { useAppStore } from "@/stores/use-pos-store";
@@ -88,7 +89,7 @@ import { useAppStore } from "@/stores/use-pos-store";
 // ============================================================
 // In-app auto-update constants
 // ============================================================
-const CURRENT_VERSION = "2.7.5";
+const CURRENT_VERSION = "2.7.6";
 const UPDATE_URL =
   "https://raw.githubusercontent.com/mohsinrasheed-Baga1/shop-pos-system/main/public/update.json";
 // The installer is split into 11 parts (~20 MB each) on the repo dist/ folder.
@@ -378,7 +379,13 @@ export function SettingsView() {
       {/* 10. Google Drive Backup card */}
       <CloudBackupCard />
 
-      {/* 11. Barcode Scanner card */}
+      {/* 11. Data Migration card */}
+      <DataMigrationCard />
+
+      {/* 12. Keyboard Shortcuts card */}
+      <ShortcutsCard />
+
+      {/* 13. Barcode Scanner card */}
       <ScannerCard />
     </div>
   );
@@ -3471,6 +3478,154 @@ function CloudBackupCard() {
             We only access files in the "POS Backups" folder. You can disconnect anytime.
           </span>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================
+// Shortcuts page card
+// ============================================================
+function ShortcutsCard() {
+  const shortcuts = [
+    { key: "Ctrl + Shift + P", desc: "Jump to POS (Sell) from any page", section: "Global" },
+    { key: "↑ ↓", desc: "Navigate products up/down in POS", section: "POS" },
+    { key: "← →", desc: "Jump 4 products left/right in POS", section: "POS" },
+    { key: "Enter", desc: "Add highlighted product to cart", section: "POS" },
+    { key: "F2", desc: "Checkout (complete sale)", section: "POS" },
+    { key: "F3", desc: "Return / Refund", section: "POS" },
+    { key: "F4", desc: "Open Calculator", section: "POS" },
+    { key: "F9", desc: "Toggle price: Regular → Wholesale → Shopkeeper", section: "POS" },
+    { key: "F12", desc: "Clear cart", section: "POS" },
+    { key: "Escape", desc: "Clear search + refocus", section: "POS" },
+    { key: "Space", desc: "Scanner: same as Enter (next scan)", section: "Scanner" },
+    { key: "0-9 + - * / Enter", desc: "Calculator keyboard input", section: "Calculator" },
+    { key: "C", desc: "Calculator: clear", section: "Calculator" },
+    { key: "Backspace", desc: "Calculator: delete last digit", section: "Calculator" },
+  ];
+
+  const sections = [...new Set(shortcuts.map((s) => s.section))];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Keyboard className="w-5 h-5 text-emerald-600" />
+          Keyboard Shortcuts
+        </CardTitle>
+        <CardDescription>All keyboard shortcuts for faster operation</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {sections.map((section) => (
+          <div key={section} className="space-y-2">
+            <h4 className="text-sm font-bold text-emerald-700 border-b pb-1">{section}</h4>
+            <div className="space-y-1">
+              {shortcuts.filter((s) => s.section === section).map((s, i) => (
+                <div key={i} className="flex items-center justify-between text-sm py-1">
+                  <span className="text-muted-foreground">{s.desc}</span>
+                  <kbd className="px-2 py-1 rounded bg-muted border text-xs font-mono font-bold">{s.key}</kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-700">
+          Tip: Use scanner + keyboard to sell without mouse. Scan product → Enter → F2 → Enter. Done!
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================
+// Data Migration (PC Transfer) card
+// ============================================================
+function DataMigrationCard() {
+  const [importing, setImporting] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const fileRef = React.useRef<HTMLInputElement>(null);
+
+  async function handleExport() {
+    try {
+      toast.success("Preparing export...");
+      const res = await fetch("/api/backup/export");
+      if (!res.ok) { toast.error("Export failed"); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `shop-pos-backup-${new Date().toISOString().slice(0, 10)}.db`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success("Database exported! Save this file to transfer to a new PC.");
+    } catch { toast.error("Export failed"); }
+  }
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/backup/import", { method: "POST", body: formData });
+      const data = await res.json();
+      if (res.ok) { toast.success("Data imported! Please restart the app."); setConfirmOpen(false); }
+      else { toast.error(data.error || "Import failed"); }
+    } catch { toast.error("Import failed"); }
+    finally { setImporting(false); if (fileRef.current) fileRef.current.value = ""; }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Database className="w-5 h-5 text-emerald-600" />
+          Data Migration (PC Transfer)
+        </CardTitle>
+        <CardDescription>Transfer your entire database to a new computer</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm">
+          <p className="font-medium text-emerald-800 mb-1">How to transfer to a new PC:</p>
+          <ol className="list-decimal list-inside space-y-1 text-emerald-700 text-xs">
+            <li>Click Export Data — a backup file will download</li>
+            <li>Copy the file to your new PC (USB, email, etc.)</li>
+            <li>Install Shop POS System on the new PC</li>
+            <li>Open Settings → Data Migration → Import Data</li>
+            <li>Select the backup file → restart the app</li>
+          </ol>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={handleExport}>
+            <Download className="w-4 h-4 mr-2" /> Export Data
+          </Button>
+          <Button variant="outline" onClick={() => setConfirmOpen(true)} className="text-amber-700 border-amber-200 hover:bg-amber-50">
+            <Upload className="w-4 h-4 mr-2" /> Import Data
+          </Button>
+        </div>
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Import will REPLACE all data</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will replace your current database with the imported file. Make sure you have exported a backup first. You will need to restart the app after importing.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => { e.preventDefault(); fileRef.current?.click(); }}
+                className="bg-amber-600 hover:bg-amber-700"
+              >
+                {importing ? "Importing..." : "Select File & Import"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+        <input ref={fileRef} type="file" accept=".db,.sqlite,.sqlite3" onChange={handleImport} className="hidden" />
       </CardContent>
     </Card>
   );
