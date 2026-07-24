@@ -88,6 +88,10 @@ interface ReportData {
   lowStock: (Product & { category?: { name: string } | null })[];
   productCount: number;
   categoryCount: number;
+  totalStockValue?: number;
+  totalRetailValue?: number;
+  totalShopStock?: number;
+  totalStoreStock?: number;
 }
 
 interface ShopSettings {
@@ -401,6 +405,44 @@ export function ReportsView() {
             danger={(data?.lowStock?.length ?? 0) > 0}
           />
         </div>
+      )}
+
+      {/* Inventory Value card */}
+      {!isLoading && (
+        <Card className="border-emerald-200">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Wallet className="w-5 h-5 text-emerald-600" />
+              <h3 className="font-bold text-sm">Inventory Value (Stock Worth)</h3>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="rounded-lg bg-emerald-50 p-3 text-center">
+                <div className="text-xs text-muted-foreground">Shop Stock (pcs)</div>
+                <div className="text-lg font-bold text-emerald-700">
+                  {data?.totalShopStock ?? 0}
+                </div>
+              </div>
+              <div className="rounded-lg bg-amber-50 p-3 text-center">
+                <div className="text-xs text-muted-foreground">Store Stock (pcs)</div>
+                <div className="text-lg font-bold text-amber-700">
+                  {data?.totalStoreStock ?? 0}
+                </div>
+              </div>
+              <div className="rounded-lg bg-blue-50 p-3 text-center">
+                <div className="text-xs text-muted-foreground">Cost Value</div>
+                <div className="text-lg font-bold text-blue-700">
+                  {settings?.currency || "Rs"} {(data?.totalStockValue ?? 0).toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded-lg bg-emerald-50 p-3 text-center">
+                <div className="text-xs text-muted-foreground">Retail Value</div>
+                <div className="text-lg font-bold text-emerald-700">
+                  {settings?.currency || "Rs"} {(data?.totalRetailValue ?? 0).toLocaleString()}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Charts + Top products */}

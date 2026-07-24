@@ -127,11 +127,13 @@ export function PosView({ settings }: PosViewProps) {
   // Handle scanned barcode — look up product/card and take action
   // Guard: prevent concurrent execution (scanner may fire twice before first completes)
   const scanningRef = React.useRef(false);
+  const lastScanResultRef = React.useRef<string | null>(null);
 
   async function handleScannedCode(code: string) {
     // Prevent double execution
     if (scanningRef.current) return;
     scanningRef.current = true;
+    lastScanResultRef.current = code; // Mark that a scan is in progress
 
     try {
       const res = await fetch(`/api/barcode?code=${encodeURIComponent(code)}`, {
@@ -151,8 +153,11 @@ export function PosView({ settings }: PosViewProps) {
     } catch {
       toast.error("Scan lookup failed");
     } finally {
-      // Release lock after 500ms to allow next scan
-      setTimeout(() => { scanningRef.current = false; }, 500);
+      // Release locks after 800ms to allow next scan
+      setTimeout(() => {
+        scanningRef.current = false;
+        lastScanResultRef.current = null;
+      }, 800);
     }
   }
 
@@ -203,6 +208,12 @@ export function PosView({ settings }: PosViewProps) {
           setHighlightedIndex((p) => Math.max(p - 4, 0));
           return;
         } else if (e.key === "Enter" && products.length > 0 && isSearchFocused) {
+          // CRITICAL: Don't add highlighted product if a scan is in progress
+          // (scanner's Enter also triggers this — causes double-add)
+          if (scanningRef.current || lastScanResultRef.current) {
+            e.preventDefault();
+            return;
+          }
           e.preventDefault();
           const product = products[highlightedIndex];
           if (product) addToCart(product);
