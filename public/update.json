@@ -1,1 +1,1 @@
-{"version":"2.7.9","releaseUrl":"https://github.com/mohsinrasheed-Baga1/shop-pos-system/releases/latest","changelog":["FIXED: Scanner adding product twice (double scan bug) — 800ms cooldown dedup","FIXED: Data Export network error — export/import API routes recreated"]}
+{"version":"2.7.10","releaseUrl":"https://github.com/mohsinrasheed-Baga1/shop-pos-system/releases/latest","changelog":["FIXED: Scanner double-add (absolute 1-second lock + async guard + Space removed)","Scan once = add once, guaranteed"]}

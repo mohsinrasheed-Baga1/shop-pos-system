@@ -13,21 +13,19 @@ interface ScanOptions {
 const subscribers = new Set<ScanCallback>();
 let listenerAttached = false;
 let buffer = "";
-let lastTime = 0;
-let lastScanCode = "";
-let lastScanTime = 0;
+let lastKeyTime = 0;
 
-// Cooldown: prevent the same barcode from firing twice within 800ms
-const SCAN_COOLDOWN_MS = 800;
+// Fire lock: prevent ANY scan from firing while a previous scan is being processed
+let scanLock = false;
+const SCAN_LOCK_MS = 1000;
 
 function fireScan(code: string) {
-  const now = Date.now();
-  // Dedup: if the exact same code was scanned very recently, ignore
-  if (code === lastScanCode && now - lastScanTime < SCAN_COOLDOWN_MS) {
+  // Absolute lock: if a scan was fired recently, ignore ALL subsequent scans
+  if (scanLock) {
     return;
   }
-  lastScanCode = code;
-  lastScanTime = now;
+  scanLock = true;
+  setTimeout(() => { scanLock = false; }, SCAN_LOCK_MS);
 
   // Clear any focused input that received scanner chars (e.g. search box)
   const active = document.activeElement;
@@ -62,24 +60,17 @@ function handleKeyDown(e: KeyboardEvent) {
   }
 
   const now = Date.now();
-  if (now - lastTime > 100) {
+  if (now - lastKeyTime > 100) {
     buffer = "";
   }
-  lastTime = now;
+  lastKeyTime = now;
 
+  // ONLY Enter triggers a scan — Space is removed to prevent double-fire
   if (e.key === "Enter") {
     if (buffer.length >= 4) {
       fireScan(buffer);
       e.preventDefault();
     }
-    buffer = "";
-    return;
-  }
-
-  // Space bar = Enter for scanners (some scanners send Space instead of Enter)
-  if (e.key === " " && buffer.length >= 4) {
-    fireScan(buffer);
-    e.preventDefault();
     buffer = "";
     return;
   }
@@ -107,7 +98,7 @@ export function useBarcodeScanner(
   onScan: ScanCallback,
   options: ScanOptions = {}
 ) {
-  const { minLength = 4, maxGap = 100 } = options;
+  const { minLength = 4 } = options;
   const callbackRef = React.useRef(onScan);
   React.useEffect(() => {
     callbackRef.current = onScan;

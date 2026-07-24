@@ -125,7 +125,14 @@ export function PosView({ settings }: PosViewProps) {
   }
 
   // Handle scanned barcode — look up product/card and take action
+  // Guard: prevent concurrent execution (scanner may fire twice before first completes)
+  const scanningRef = React.useRef(false);
+
   async function handleScannedCode(code: string) {
+    // Prevent double execution
+    if (scanningRef.current) return;
+    scanningRef.current = true;
+
     try {
       const res = await fetch(`/api/barcode?code=${encodeURIComponent(code)}`, {
         cache: "no-store",
@@ -136,7 +143,6 @@ export function PosView({ settings }: PosViewProps) {
         toast.success(`Scanned: ${data.product.name}`);
       } else if (data.found && data.kind === "card" && data.card) {
         toast.success(`Shop Card: ${data.card.name} — ${data.card.type === "WHOLESALE" ? "Wholesale" : "Regular"} mode`);
-        // set sale type based on card type
         cart.setSaleType(data.card.type === "WHOLESALE" ? "WHOLESALE" : "RETAIL");
         setScannedCard(data.card);
       } else {
@@ -144,6 +150,9 @@ export function PosView({ settings }: PosViewProps) {
       }
     } catch {
       toast.error("Scan lookup failed");
+    } finally {
+      // Release lock after 500ms to allow next scan
+      setTimeout(() => { scanningRef.current = false; }, 500);
     }
   }
 
