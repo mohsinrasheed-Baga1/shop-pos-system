@@ -205,7 +205,7 @@ export function PosView({ settings }: PosViewProps) {
       if (e.key === "F2") { e.preventDefault(); setCheckoutOpen(true); }
       else if (e.key === "F3") { e.preventDefault(); setReturnOpen(true); }
       else if (e.key === "F4") { e.preventDefault(); setCalcOpen(true); }
-      else if (e.key === "F9") { e.preventDefault(); cart.setSaleType(cart.saleType === "RETAIL" ? "WHOLESALE" : "RETAIL"); }
+      else if (e.key === "F9") { e.preventDefault(); cart.setSaleType(cart.saleType === "RETAIL" ? "WHOLESALE" : cart.saleType === "WHOLESALE" ? "SHOPKEEPER" : "RETAIL"); }
       else if (e.key === "F12") { e.preventDefault(); cart.clear(); setScannedCard(null); toast.success("Cart cleared"); setTimeout(() => searchRef.current?.focus(), 50); }
       else if (e.key === "Escape") { setQ(""); setHighlightedIndex(0); searchRef.current?.focus(); }
     }
@@ -227,6 +227,8 @@ export function PosView({ settings }: PosViewProps) {
           quantity: i.quantity,
           price: cart.saleType === "WHOLESALE" && i.product.wholesalePrice > 0
             ? i.product.wholesalePrice
+            : cart.saleType === "SHOPKEEPER" && i.product.shopkeeperPrice > 0
+            ? i.product.shopkeeperPrice
             : i.product.salePrice,
         })),
         discount: cart.discount,
@@ -282,27 +284,37 @@ export function PosView({ settings }: PosViewProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Retail/Wholesale toggle */}
-          <div className="flex rounded-lg border overflow-hidden">
+          {/* 3-way price toggle: Retail / Wholesale / Shopkeeper */}
+          <div className="flex rounded-lg border-2 overflow-hidden shadow-sm">
             <button
               onClick={() => cart.setSaleType("RETAIL")}
-              className={`px-3 py-2 text-sm font-medium transition-colors ${
+              className={`px-4 py-2 text-sm font-bold transition-all ${
                 cart.saleType === "RETAIL"
-                  ? "bg-emerald-600 text-white"
-                  : "bg-background hover:bg-muted"
+                  ? "bg-emerald-600 text-white shadow-inner"
+                  : "bg-background hover:bg-emerald-50 text-emerald-700"
               }`}
             >
-              Retail
+              Regular
             </button>
             <button
               onClick={() => cart.setSaleType("WHOLESALE")}
-              className={`px-3 py-2 text-sm font-medium transition-colors ${
+              className={`px-4 py-2 text-sm font-bold transition-all border-l-2 ${
                 cart.saleType === "WHOLESALE"
-                  ? "bg-amber-500 text-white"
-                  : "bg-background hover:bg-muted"
+                  ? "bg-amber-500 text-white shadow-inner"
+                  : "bg-background hover:bg-amber-50 text-amber-700"
               }`}
             >
               Wholesale
+            </button>
+            <button
+              onClick={() => cart.setSaleType("SHOPKEEPER")}
+              className={`px-4 py-2 text-sm font-bold transition-all border-l-2 ${
+                cart.saleType === "SHOPKEEPER"
+                  ? "bg-purple-600 text-white shadow-inner"
+                  : "bg-background hover:bg-purple-50 text-purple-700"
+              }`}
+            >
+              Shopkeeper
             </button>
           </div>
           <Button
@@ -420,12 +432,12 @@ export function PosView({ settings }: PosViewProps) {
                   <div className="flex items-center justify-between mt-1">
                     <span className="text-emerald-700 font-bold text-sm">
                       {formatMoney(
-                        cart.saleType === "WHOLESALE" && p.wholesalePrice > 0
+                        cart.saleType === "WHOLESALE" && p.wholesalePrice > 0 ? p.wholesalePrice : cart.saleType === "SHOPKEEPER" && p.shopkeeperPrice > 0 ? p.shopkeeperPrice : p.salePrice
                           ? p.wholesalePrice
                           : p.salePrice,
                         currency
                       )}
-                      {cart.saleType === "WHOLESALE" && p.wholesalePrice > 0 && (
+                      {cart.saleType === "WHOLESALE" && p.wholesalePrice > 0 ? p.wholesalePrice : cart.saleType === "SHOPKEEPER" && p.shopkeeperPrice > 0 ? p.shopkeeperPrice : p.salePrice && (
                         <span className="ml-1 text-[10px] text-amber-600">W</span>
                       )}
                     </span>
@@ -492,7 +504,7 @@ export function PosView({ settings }: PosViewProps) {
                             </div>
                             <div className="text-xs text-muted-foreground">
                               {formatMoney(
-                                cart.saleType === "WHOLESALE" && item.product.wholesalePrice > 0
+                                cart.saleType === "WHOLESALE" && item.product.wholesalePrice > 0 ? item.product.wholesalePrice : cart.saleType === "SHOPKEEPER" && item.product.shopkeeperPrice > 0 ? item.product.shopkeeperPrice : item.product.salePrice
                                   ? item.product.wholesalePrice
                                   : item.product.salePrice,
                                 currency
@@ -539,7 +551,7 @@ export function PosView({ settings }: PosViewProps) {
                           </div>
                           <div className="text-sm font-bold text-emerald-700 w-16 text-right">
                             {formatMoney(
-                              (cart.saleType === "WHOLESALE" && item.product.wholesalePrice > 0
+                              (cart.saleType === "WHOLESALE" && item.product.wholesalePrice > 0 ? item.product.wholesalePrice : cart.saleType === "SHOPKEEPER" && item.product.shopkeeperPrice > 0 ? item.product.shopkeeperPrice : item.product.salePrice
                                 ? item.product.wholesalePrice
                                 : item.product.salePrice) * item.quantity,
                               currency

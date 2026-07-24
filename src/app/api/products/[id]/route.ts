@@ -27,6 +27,7 @@ export async function PUT(
       costPrice: Number(body.costPrice) || 0,
       salePrice: Number(body.salePrice) || 0,
       wholesalePrice: Number(body.wholesalePrice) || 0,
+      shopkeeperPrice: body.shopkeeperPrice !== undefined ? Number(body.shopkeeperPrice) : existing.shopkeeperPrice,
       unit: body.unit || "piece",
       stock: newStock,
       storeStock: body.storeStock !== undefined && body.storeStock !== "" ? Number(body.storeStock) : existing.storeStock,

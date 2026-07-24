@@ -31,12 +31,15 @@ export const useAppStore = create<AppState>((set) => ({
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
 }));
 
-export type SaleType = "RETAIL" | "WHOLESALE";
+export type SaleType = "RETAIL" | "WHOLESALE" | "SHOPKEEPER";
 
 // Helper: get effective price for a product based on sale type
 export function effectivePrice(product: Product, saleType: SaleType): number {
   if (saleType === "WHOLESALE" && product.wholesalePrice > 0) {
     return product.wholesalePrice;
+  }
+  if (saleType === "SHOPKEEPER" && product.shopkeeperPrice > 0) {
+    return product.shopkeeperPrice;
   }
   return product.salePrice;
 }

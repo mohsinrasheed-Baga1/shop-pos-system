@@ -70,6 +70,7 @@ export async function POST(req: NextRequest) {
       costPrice: Number(body.costPrice) || 0,
       salePrice: Number(body.salePrice) || 0,
       wholesalePrice: Number(body.wholesalePrice) || 0,
+      shopkeeperPrice: Number(body.shopkeeperPrice) || 0,
       unit: body.unit || "piece",
       stock: Number(body.stock) || 0,
       storeStock: Number(body.storeStock) || 0,

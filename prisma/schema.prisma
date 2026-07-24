@@ -57,6 +57,7 @@ model Product {
   costPrice       Float    @default(0)
   salePrice       Float    @default(0)
   wholesalePrice  Float    @default(0)
+  shopkeeperPrice Float    @default(0)
   unit            String   @default("piece")
   stock           Float    @default(0)
   storeStock      Float    @default(0)

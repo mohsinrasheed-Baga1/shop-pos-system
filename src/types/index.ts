@@ -18,6 +18,7 @@ export interface Product {
   costPrice: number;
   salePrice: number;
   wholesalePrice: number;
+  shopkeeperPrice: number;
   unit: string;
   stock: number;
   storeStock: number;

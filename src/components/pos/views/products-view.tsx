@@ -79,6 +79,7 @@ const emptyForm = {
   costPrice: "",
   salePrice: "",
   wholesalePrice: "",
+  shopkeeperPrice: "",
   unit: "piece",
   stock: "",
   minStock: "",
@@ -181,6 +182,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
       costPrice: p.costPrice.toString(),
       salePrice: p.salePrice.toString(),
       wholesalePrice: (p.wholesalePrice || 0).toString(),
+      shopkeeperPrice: (p.shopkeeperPrice || 0).toString(),
       unit: p.unit,
       stock: p.stock.toString(),
       minStock: p.minStock.toString(),
@@ -218,6 +220,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
         costPrice: Number(form.costPrice) || 0,
         salePrice: Number(form.salePrice) || 0,
         wholesalePrice: Number(form.wholesalePrice) || 0,
+        shopkeeperPrice: Number(form.shopkeeperPrice) || 0,
         unit: form.unit,
         stock: Number(form.stock) || 0,
         minStock: Number(form.minStock) || 0,
@@ -604,6 +607,16 @@ export function ProductsView({ userRole }: ProductsViewProps) {
                   placeholder="0"
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Shopkeeper Price</Label>
+                <Input
+                  type="number"
+                  value={form.shopkeeperPrice}
+                  onChange={(e) => setForm({ ...form, shopkeeperPrice: e.target.value })}
+                  className="text-left"
+                  placeholder="0"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
@@ -812,10 +825,11 @@ function BarcodePrintDialog({
           page-break-inside: avoid;
         }
         .shop-name {
-          font-size: 7px;
+          font-size: 8px;
           font-weight: bold;
-          line-height: 1.05;
+          line-height: 1;
           width: 100%;
+          margin-bottom: 1px;
         }
         .barcode {
           flex: 1;
@@ -824,12 +838,14 @@ function BarcodePrintDialog({
           justify-content: center;
           width: 100%;
           overflow: hidden;
+          margin: 1px 0;
         }
         .product-name {
-          font-size: 7px;
-          font-weight: 600;
-          line-height: 1.05;
+          font-size: 9px;
+          font-weight: bold;
+          line-height: 1;
           width: 100%;
+          margin-top: 1px;
         }
       </style></head><body>${content.innerHTML}</body></html>
     `);

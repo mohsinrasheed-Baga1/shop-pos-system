@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS Product (
   costPrice REAL NOT NULL DEFAULT 0,
   salePrice REAL NOT NULL DEFAULT 0,
   wholesalePrice REAL NOT NULL DEFAULT 0,
+  shopkeeperPrice REAL NOT NULL DEFAULT 0,
   unit TEXT NOT NULL DEFAULT 'piece',
   stock REAL NOT NULL DEFAULT 0,
   storeStock REAL NOT NULL DEFAULT 0,
@@ -211,6 +212,7 @@ CREATE TABLE IF NOT EXISTS Settings (
 const COLUMN_ADDITIONS: Record<string, [string, string][]> = {
   Product: [
     ["wholesalePrice", "REAL NOT NULL DEFAULT 0"],
+    ["shopkeeperPrice", "REAL NOT NULL DEFAULT 0"],
     ["storeStock", "REAL NOT NULL DEFAULT 0"],
     ["expiryDate", "DATETIME"],
     ["manufacturingDate", "DATETIME"],
