@@ -122,6 +122,7 @@ export function ProductsView({ userRole }: ProductsViewProps) {
   const [saving, setSaving] = React.useState(false);
   const [deleteId, setDeleteId] = React.useState<string | null>(null);
   const [printProduct, setPrintProduct] = React.useState<Product | null>(null);
+  const [wizardOpen, setWizardOpen] = React.useState(false);
 
   const loadProducts = React.useCallback(async () => {
     setLoading(true);
@@ -297,9 +298,14 @@ export function ProductsView({ userRole }: ProductsViewProps) {
             <RefreshCw className="w-4 h-4 mr-2" /> Refresh
           </Button>
           {canManage && (
-            <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openAdd}>
-              <Plus className="w-4 h-4 mr-2" /> New Product
-            </Button>
+            <>
+              <Button variant="outline" className="border-emerald-300 text-emerald-700 hover:bg-emerald-50" onClick={() => setWizardOpen(true)}>
+                <Plus className="w-4 h-4 mr-2" /> Quick Add (Box/Piece)
+              </Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700" onClick={openAdd}>
+                <Plus className="w-4 h-4 mr-2" /> New Product
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -757,6 +763,14 @@ export function ProductsView({ userRole }: ProductsViewProps) {
         product={printProduct}
         onClose={() => setPrintProduct(null)}
       />
+
+      {/* Quick Add Wizard */}
+      <ProductWizard
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        categories={categories}
+        onDone={loadProducts}
+      />
     </div>
   );
 }
@@ -967,6 +981,257 @@ function BarcodePrintDialog({
             <Printer className="w-4 h-4 mr-2" /> Print
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ============================================================
+// Product Wizard — Box/Bag + Piece dual entry
+// ============================================================
+interface ProductWizardProps {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  categories: Category[];
+  onDone: () => void;
+}
+
+function ProductWizard({ open, onOpenChange, categories, onDone }: ProductWizardProps) {
+  const [step, setStep] = React.useState(1);
+  const [productType, setProductType] = React.useState<"piece" | "box">("piece");
+  const [saving, setSaving] = React.useState(false);
+
+  // Shared
+  const [name, setName] = React.useState("");
+  const [categoryId, setCategoryId] = React.useState("");
+
+  // Box info
+  const [boxBarcode, setBoxBarcode] = React.useState("");
+  const [piecesPerBox, setPiecesPerBox] = React.useState("");
+  const [boxQty, setBoxQty] = React.useState("");
+  const [boxCostPrice, setBoxCostPrice] = React.useState("");
+  const [boxSalePrice, setBoxSalePrice] = React.useState("");
+  const [boxWholesalePrice, setBoxWholesalePrice] = React.useState("");
+  const [boxShopkeeperPrice, setBoxShopkeeperPrice] = React.useState("");
+
+  // Piece info
+  const [pieceBarcode, setPieceBarcode] = React.useState("");
+  const [pieceSalePrice, setPieceSalePrice] = React.useState("");
+  const [pieceWholesalePrice, setPieceWholesalePrice] = React.useState("");
+  const [pieceShopkeeperPrice, setPieceShopkeeperPrice] = React.useState("");
+
+  // Auto-calculated
+  const totalPieces = (Number(piecesPerBox) || 0) * (Number(boxQty) || 0);
+  const autoPieceCost = totalPieces > 0 ? (Number(boxCostPrice) || 0) / totalPieces : 0;
+  const autoPieceSale = (Number(piecesPerBox) || 0) > 0 ? (Number(boxSalePrice) || 0) / (Number(piecesPerBox) || 0) : 0;
+  const autoPieceWholesale = (Number(piecesPerBox) || 0) > 0 ? (Number(boxWholesalePrice) || 0) / (Number(piecesPerBox) || 0) : 0;
+  const autoPieceShopkeeper = (Number(piecesPerBox) || 0) > 0 ? (Number(boxShopkeeperPrice) || 0) / (Number(piecesPerBox) || 0) : 0;
+
+  function reset() {
+    setStep(1); setProductType("piece"); setName(""); setCategoryId("");
+    setBoxBarcode(""); setPiecesPerBox(""); setBoxQty("");
+    setBoxCostPrice(""); setBoxSalePrice(""); setBoxWholesalePrice(""); setBoxShopkeeperPrice("");
+    setPieceBarcode(""); setPieceSalePrice(""); setPieceWholesalePrice(""); setPieceShopkeeperPrice("");
+  }
+
+  React.useEffect(() => { if (!open) { const t = setTimeout(reset, 200); return () => clearTimeout(t); } }, [open]);
+
+  // Auto-fill piece prices when box prices change
+  React.useEffect(() => {
+    if (productType === "box" && step >= 2) {
+      setPieceSalePrice(autoPieceSale ? autoPieceSale.toFixed(2) : "");
+      setPieceWholesalePrice(autoPieceWholesale ? autoPieceWholesale.toFixed(2) : "");
+      setPieceShopkeeperPrice(autoPieceShopkeeper ? autoPieceShopkeeper.toFixed(2) : "");
+    }
+  }, [boxSalePrice, boxWholesalePrice, boxShopkeeperPrice, piecesPerBox]);
+
+  async function saveProducts() {
+    setSaving(true);
+    try {
+      if (productType === "piece") {
+        // Save single piece product
+        const body = {
+          name, barcode: pieceBarcode, categoryId: categoryId || null,
+          costPrice: 0, salePrice: Number(pieceSalePrice) || 0,
+          wholesalePrice: Number(pieceWholesalePrice) || 0,
+          shopkeeperPrice: Number(pieceShopkeeperPrice) || 0,
+          unit: "piece", stock: 0, hasBarcode: true, active: true,
+        };
+        const res = await fetch("/api/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        const data = await res.json();
+        if (!res.ok) { toast.error(data.error || "Failed"); setSaving(false); return; }
+        toast.success(`${name} added!`);
+      } else {
+        // Save BOX product first
+        const boxBody = {
+          name: `${name} (Box)`, barcode: boxBarcode, categoryId: categoryId || null,
+          costPrice: Number(boxCostPrice) || 0, salePrice: Number(boxSalePrice) || 0,
+          wholesalePrice: Number(boxWholesalePrice) || 0, shopkeeperPrice: Number(boxShopkeeperPrice) || 0,
+          unit: "piece", stock: totalPieces, hasBarcode: true, active: true,
+          packBarcode: pieceBarcode, packQuantity: Number(piecesPerBox) || 0, packPrice: Number(boxSalePrice) || 0,
+        };
+        const boxRes = await fetch("/api/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(boxBody) });
+        const boxData = await boxRes.json();
+        if (!boxRes.ok) { toast.error(boxData.error || "Box save failed"); setSaving(false); return; }
+
+        // Save PIECE product (linked)
+        const pieceBody = {
+          name, barcode: pieceBarcode, categoryId: categoryId || null,
+          costPrice: autoPieceCost, salePrice: Number(pieceSalePrice) || autoPieceSale,
+          wholesalePrice: Number(pieceWholesalePrice) || autoPieceWholesale,
+          shopkeeperPrice: Number(pieceShopkeeperPrice) || autoPieceShopkeeper,
+          unit: "piece", stock: totalPieces, hasBarcode: true, active: true,
+        };
+        const pieceRes = await fetch("/api/products", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pieceBody) });
+        const pieceData = await pieceRes.json();
+        if (!pieceRes.ok) {
+          // Box was saved but piece failed — warn but don't fail
+          toast.warning(`Box saved but piece barcode error: ${pieceData.error}`);
+        } else {
+          toast.success(`${name} added! Box (${totalPieces} pcs) + Piece — both saved.`);
+        }
+      }
+      onDone();
+      onOpenChange(false);
+    } catch { toast.error("Network error"); } finally { setSaving(false); }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Quick Add Product — Step {step}/2</DialogTitle>
+        </DialogHeader>
+
+        {/* STEP 1: Basic info + type selection */}
+        {step === 1 && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Product Name *</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Biscuit, Sugar, etc." autoFocus />
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={categoryId || "none"} onValueChange={(v) => setCategoryId(v === "none" ? "" : v)}>
+                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No category</SelectItem>
+                  {categories.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>What are you saving? *</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setProductType("piece")}
+                  className={`rounded-lg border-2 p-4 text-center transition-all ${productType === "piece" ? "border-emerald-500 bg-emerald-50" : "border-border hover:bg-muted"}`}
+                >
+                  <Package className="w-6 h-6 mx-auto mb-1 text-emerald-600" />
+                  <div className="font-bold">Piece</div>
+                  <div className="text-xs text-muted-foreground">Single item</div>
+                </button>
+                <button
+                  onClick={() => setProductType("box")}
+                  className={`rounded-lg border-2 p-4 text-center transition-all ${productType === "box" ? "border-amber-500 bg-amber-50" : "border-border hover:bg-muted"}`}
+                >
+                  <Package className="w-6 h-6 mx-auto mb-1 text-amber-600" />
+                  <div className="font-bold">Box / Bag</div>
+                  <div className="text-xs text-muted-foreground">Contains multiple pieces</div>
+                </button>
+              </div>
+            </div>
+            {productType === "box" && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-xs text-amber-700">
+                You'll enter box details first (barcode, pieces per box, box prices), then piece details (barcode + prices auto-calculated).
+              </div>
+            )}
+            <Button
+              className="w-full bg-emerald-600 hover:bg-emerald-700"
+              disabled={!name.trim()}
+              onClick={() => setStep(2)}
+            >
+              Next →
+            </Button>
+          </div>
+        )}
+
+        {/* STEP 2: Details */}
+        {step === 2 && (
+          <div className="space-y-4">
+            {/* Piece type — simple form */}
+            {productType === "piece" && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <Label>Piece Barcode *</Label>
+                  <Input value={pieceBarcode} onChange={(e) => setPieceBarcode(e.target.value)} placeholder="Scan or type barcode" data-barcode-input="true" className="text-left" />
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-2"><Label>Regular Price</Label><Input type="number" value={pieceSalePrice} onChange={(e) => setPieceSalePrice(e.target.value)} placeholder="0" className="text-left" /></div>
+                  <div className="space-y-2"><Label>Wholesale</Label><Input type="number" value={pieceWholesalePrice} onChange={(e) => setPieceWholesalePrice(e.target.value)} placeholder="0" className="text-left" /></div>
+                  <div className="space-y-2"><Label>Shopkeeper</Label><Input type="number" value={pieceShopkeeperPrice} onChange={(e) => setPieceShopkeeperPrice(e.target.value)} placeholder="0" className="text-left" /></div>
+                </div>
+              </div>
+            )}
+
+            {/* Box type — box details + piece details */}
+            {productType === "box" && (
+              <>
+                {/* Box details */}
+                <div className="rounded-lg border-2 border-amber-200 bg-amber-50/50 p-3 space-y-3">
+                  <div className="flex items-center gap-2"><Package className="w-4 h-4 text-amber-600" /><Label className="font-bold text-amber-800">Box Details</Label></div>
+                  <div className="space-y-2">
+                    <Label>Box Barcode *</Label>
+                    <Input value={boxBarcode} onChange={(e) => setBoxBarcode(e.target.value)} placeholder="Scan box barcode" data-barcode-input="true" className="text-left" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2"><Label>Pieces per Box *</Label><Input type="number" value={piecesPerBox} onChange={(e) => setPiecesPerBox(e.target.value)} placeholder="e.g. 80" className="text-left" /></div>
+                    <div className="space-y-2"><Label>Number of Boxes</Label><Input type="number" value={boxQty} onChange={(e) => setBoxQty(e.target.value)} placeholder="e.g. 10" className="text-left" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2"><Label>Box Cost Price</Label><Input type="number" value={boxCostPrice} onChange={(e) => setBoxCostPrice(e.target.value)} placeholder="0" className="text-left" /></div>
+                    <div className="space-y-2"><Label>Box Sale Price</Label><Input type="number" value={boxSalePrice} onChange={(e) => setBoxSalePrice(e.target.value)} placeholder="0" className="text-left" /></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2"><Label>Box Wholesale</Label><Input type="number" value={boxWholesalePrice} onChange={(e) => setBoxWholesalePrice(e.target.value)} placeholder="0" className="text-left" /></div>
+                    <div className="space-y-2"><Label>Box Shopkeeper</Label><Input type="number" value={boxShopkeeperPrice} onChange={(e) => setBoxShopkeeperPrice(e.target.value)} placeholder="0" className="text-left" /></div>
+                  </div>
+                  {totalPieces > 0 && (
+                    <div className="rounded bg-amber-100 p-2 text-center text-sm font-bold text-amber-800">
+                      Total: {boxQty || 0} boxes × {piecesPerBox || 0} pcs = {totalPieces} pieces
+                    </div>
+                  )}
+                </div>
+
+                {/* Piece details (auto-calculated, editable) */}
+                <div className="rounded-lg border-2 border-emerald-200 bg-emerald-50/50 p-3 space-y-3">
+                  <div className="flex items-center gap-2"><Package className="w-4 h-4 text-emerald-600" /><Label className="font-bold text-emerald-800">Piece Details (auto-calculated)</Label></div>
+                  <div className="space-y-2">
+                    <Label>Piece Barcode *</Label>
+                    <Input value={pieceBarcode} onChange={(e) => setPieceBarcode(e.target.value)} placeholder="Scan piece barcode" data-barcode-input="true" className="text-left" />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-2"><Label>Regular/Pc</Label><Input type="number" value={pieceSalePrice} onChange={(e) => setPieceSalePrice(e.target.value)} placeholder={autoPieceSale ? autoPieceSale.toFixed(2) : "0"} className="text-left" /></div>
+                    <div className="space-y-2"><Label>Wholesale/Pc</Label><Input type="number" value={pieceWholesalePrice} onChange={(e) => setPieceWholesalePrice(e.target.value)} placeholder={autoPieceWholesale ? autoPieceWholesale.toFixed(2) : "0"} className="text-left" /></div>
+                    <div className="space-y-2"><Label>Shopkeeper/Pc</Label><Input type="number" value={pieceShopkeeperPrice} onChange={(e) => setPieceShopkeeperPrice(e.target.value)} placeholder={autoPieceShopkeeper ? autoPieceShopkeeper.toFixed(2) : "0"} className="text-left" /></div>
+                  </div>
+                  <div className="text-xs text-emerald-600">Prices auto-calculated from box price ÷ pieces per box. You can override.</div>
+                </div>
+              </>
+            )}
+
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setStep(1)}>← Back</Button>
+              <Button
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                disabled={saving || (productType === "piece" ? !pieceBarcode.trim() : !boxBarcode.trim() || !pieceBarcode.trim())}
+                onClick={saveProducts}
+              >
+                {saving ? "Saving..." : "Save Product"}
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
