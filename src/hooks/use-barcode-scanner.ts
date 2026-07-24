@@ -14,49 +14,62 @@ const subscribers = new Set<ScanCallback>();
 let listenerAttached = false;
 let buffer = "";
 let lastTime = 0;
+let lastScanCode = "";
+let lastScanTime = 0;
+
+// Cooldown: prevent the same barcode from firing twice within 800ms
+const SCAN_COOLDOWN_MS = 800;
+
+function fireScan(code: string) {
+  const now = Date.now();
+  // Dedup: if the exact same code was scanned very recently, ignore
+  if (code === lastScanCode && now - lastScanTime < SCAN_COOLDOWN_MS) {
+    return;
+  }
+  lastScanCode = code;
+  lastScanTime = now;
+
+  // Clear any focused input that received scanner chars (e.g. search box)
+  const active = document.activeElement;
+  if (
+    active &&
+    active.tagName === "INPUT" &&
+    active.getAttribute("data-barcode-input") !== "true"
+  ) {
+    (active as HTMLInputElement).value = "";
+    active.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  subscribers.forEach((cb) => {
+    try {
+      cb(code);
+    } catch {}
+  });
+}
 
 function handleKeyDown(e: KeyboardEvent) {
   // Ignore modifier combos
   if (e.ctrlKey || e.altKey || e.metaKey) return;
 
   // Check if a text input with data-barcode-input is focused
-  // (e.g. product add dialog barcode field — scanner should type into it, not fire global)
   const active = document.activeElement;
   if (
     active &&
     active.tagName === "INPUT" &&
     active.getAttribute("data-barcode-input") === "true"
   ) {
-    // Scanner types into the field directly, don't fire global callback
     return;
   }
 
   const now = Date.now();
   if (now - lastTime > 100) {
-    // gap too long — start fresh
     buffer = "";
   }
   lastTime = now;
 
   if (e.key === "Enter") {
     if (buffer.length >= 4) {
-      // Fire to all subscribers
-      const code = buffer;
-      // Clear any focused input that received scanner chars (e.g. search box)
-      const active = document.activeElement;
-      if (
-        active &&
-        active.tagName === "INPUT" &&
-        active.getAttribute("data-barcode-input") !== "true"
-      ) {
-        (active as HTMLInputElement).value = "";
-        active.dispatchEvent(new Event("input", { bubbles: true }));
-      }
-      subscribers.forEach((cb) => {
-        try {
-          cb(code);
-        } catch {}
-      });
+      fireScan(buffer);
       e.preventDefault();
     }
     buffer = "";
@@ -65,21 +78,7 @@ function handleKeyDown(e: KeyboardEvent) {
 
   // Space bar = Enter for scanners (some scanners send Space instead of Enter)
   if (e.key === " " && buffer.length >= 4) {
-    const code = buffer;
-    const active = document.activeElement;
-    if (
-      active &&
-      active.tagName === "INPUT" &&
-      active.getAttribute("data-barcode-input") !== "true"
-    ) {
-      (active as HTMLInputElement).value = "";
-      active.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-    subscribers.forEach((cb) => {
-      try {
-        cb(code);
-      } catch {}
-    });
+    fireScan(buffer);
     e.preventDefault();
     buffer = "";
     return;
