@@ -82,6 +82,7 @@ import {
   List,
   Clock,
   Keyboard,
+  HardDriveDownload,
 } from "lucide-react";
 import type { Settings } from "@/types";
 import { useAppStore } from "@/stores/use-pos-store";
@@ -89,7 +90,7 @@ import { useAppStore } from "@/stores/use-pos-store";
 // ============================================================
 // In-app auto-update constants
 // ============================================================
-const CURRENT_VERSION = "2.7.7";
+const CURRENT_VERSION = "2.7.8";
 const UPDATE_URL =
   "https://raw.githubusercontent.com/mohsinrasheed-Baga1/shop-pos-system/main/public/update.json";
 // The installer is split into 11 parts (~20 MB each) on the repo dist/ folder.
@@ -220,6 +221,7 @@ function formatDate(iso: string): string {
 export function SettingsView() {
   const [loading, setLoading] = React.useState(true);
   const [settings, setSettings] = React.useState<Settings | null>(null);
+  const [activeSection, setActiveSection] = React.useState("shop");
 
   const reload = React.useCallback(async () => {
     try {
@@ -309,84 +311,66 @@ export function SettingsView() {
         <div>
           <h1 className="text-xl lg:text-2xl font-bold">Shop Settings</h1>
           <p className="text-sm text-muted-foreground">
-            Control your overall POS system settings from here
+            Click a button below to open that section
           </p>
         </div>
       </div>
 
-      {/* Info card — each section saves independently */}
-      <Card className="border-emerald-100 bg-emerald-50/40 dark:bg-emerald-950/20">
-        <CardContent className="p-4 lg:p-5">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center shrink-0">
-              <Info className="w-5 h-5 text-emerald-700 dark:text-emerald-400" />
-            </div>
-            <div className="space-y-2 text-sm leading-6">
-              <p className="font-semibold text-emerald-800 dark:text-emerald-300">
-                Each section below saves independently
-              </p>
-              <p className="text-muted-foreground">
-                Shop details, sub-name, logo, printer settings, passwords and
-                backups are managed separately — use the Save button on each
-                card.
-              </p>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
-                  <Receipt className="w-3.5 h-3.5" /> Receipts
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
-                  <FileText className="w-3.5 h-3.5" /> Invoices
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
-                  <Percent className="w-3.5 h-3.5" /> Tax
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">
-                  <ImageIcon className="w-3.5 h-3.5" /> Logo
-                </span>
+      {/* Settings menu grid — each button opens a section */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        {[
+          { id: "shop", label: "Shop Details", icon: Store, color: "emerald" },
+          { id: "subname", label: "Sub-Name", icon: Tag, color: "emerald" },
+          { id: "logo", label: "Logo", icon: ImageIcon, color: "emerald" },
+          { id: "printer", label: "Printer", icon: Printer, color: "emerald" },
+          { id: "password", label: "Change Password", icon: KeyRound, color: "amber" },
+          { id: "backuppw", label: "Backup Password", icon: ShieldCheck, color: "amber" },
+          { id: "backup", label: "Backup & Restore", icon: Database, color: "emerald" },
+          { id: "sharing", label: "Multi-PC Sharing", icon: Network, color: "emerald" },
+          { id: "updates", label: "Check Updates", icon: DownloadCloud, color: "emerald" },
+          { id: "gdrive", label: "Google Drive", icon: Cloud, color: "emerald" },
+          { id: "migration", label: "Data Migration", icon: HardDriveDownload, color: "emerald" },
+          { id: "shortcuts", label: "Shortcuts", icon: Keyboard, color: "emerald" },
+          { id: "scanner", label: "Barcode Scanner", icon: ScanBarcode, color: "emerald" },
+        ].map((item) => {
+          const Icon = item.icon;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all hover:shadow-md ${
+                activeSection === item.id
+                  ? "border-emerald-500 bg-emerald-50"
+                  : "border-border hover:border-emerald-300 bg-card"
+              }`}
+            >
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                activeSection === item.id ? "bg-emerald-600" : "bg-emerald-100"
+              }`}>
+                <Icon className={`w-5 h-5 ${activeSection === item.id ? "text-white" : "text-emerald-600"}`} />
               </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+              <span className="text-xs font-medium text-center">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
-      {/* 1. Shop Details card */}
-      <ShopDetailsCard settings={settings} onSave={savePartial} />
+      <Separator />
 
-      {/* 2. Sub-Name card */}
-      <SubNameCard settings={settings} onSave={savePartial} />
-
-      {/* 3. Logo card */}
-      <LogoCard settings={settings} onSave={savePartial} />
-
-      {/* 4. Printer Settings card */}
-      <PrinterSettingsCard settings={settings} onSave={savePartial} />
-
-      {/* 5. Change Password card */}
-      <ChangePasswordCard />
-
-      {/* 6. Backup Password card */}
-      <BackupPasswordCard settings={settings} onSaved={reload} />
-
-      {/* 7. Backup & Restore card */}
-      <BackupRestoreCard />
-
-      {/* 8. Multi-Computer Sharing card */}
-      <MultiComputerSharingCard settings={settings} onSaved={reload} />
-
-      {/* 9. Software Updates card */}
-      <SoftwareUpdatesCard />
-
-      {/* 10. Google Drive Backup card */}
-      <CloudBackupCard />
-
-      {/* 11. Data Migration card */}
-      <DataMigrationCard />
-
-      {/* 12. Keyboard Shortcuts card */}
-      <ShortcutsCard />
-
-      {/* 13. Barcode Scanner card */}
-      <ScannerCard />
+      {/* Active section content */}
+      {activeSection === "shop" && <ShopDetailsCard settings={settings} onSave={savePartial} />}
+      {activeSection === "subname" && <SubNameCard settings={settings} onSave={savePartial} />}
+      {activeSection === "logo" && <LogoCard settings={settings} onSave={savePartial} />}
+      {activeSection === "printer" && <PrinterSettingsCard settings={settings} onSave={savePartial} />}
+      {activeSection === "password" && <ChangePasswordCard />}
+      {activeSection === "backuppw" && <BackupPasswordCard settings={settings} onSaved={reload} />}
+      {activeSection === "backup" && <BackupRestoreCard />}
+      {activeSection === "sharing" && <MultiComputerSharingCard settings={settings} onSaved={reload} />}
+      {activeSection === "updates" && <SoftwareUpdatesCard />}
+      {activeSection === "gdrive" && <CloudBackupCard />}
+      {activeSection === "migration" && <DataMigrationCard />}
+      {activeSection === "shortcuts" && <ShortcutsCard />}
+      {activeSection === "scanner" && <ScannerCard />}
     </div>
   );
 }
